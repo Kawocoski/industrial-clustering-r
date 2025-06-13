@@ -1,0 +1,22 @@
+"0","cat(""K-MEANS KÜME ÖZETİ:\n"")"
+"1","K-MEANS KÜME ÖZETİ:
+"
+"0","kmeans_summary <- data_clean %>% "
+"0","  group_by(kmeans_cluster) %>% "
+"0","  summarise("
+"0","    n = n(),"
+"0","    ortalama_debi = round(mean(Giris1_Anlik), 2),"
+"0","    medyan_debi = round(median(Giris1_Anlik), 2),"
+"0","    min_debi = round(min(Giris1_Anlik), 2),"
+"0","    max_debi = round(max(Giris1_Anlik), 2),"
+"0","    std_debi = round(sd(Giris1_Anlik), 2),"
+"0","    hafta_sonu_oran = round(mean(Hafta_Sonu_num), 2)"
+"0","  )"
+"0","print(kmeans_summary)"
+"2","G2;H2;Warningh in gzfile(file, ""wb"") :
+  sD1kD1EtD1rD1lmD1E dosya 'C:/Users/Enis/Desktop/Yeni_veri_madencili?i_vdevi/.Rproj.user/shared/notebooks/-main/1/s/ca5bnkzwg4tgm_t\_rs_rdf_1f6877595dc4.rdf' aC'D1lamadD1, muhtemel sebep: Illegal byte sequenceg
+"
+"2","G1;H1;Errorh in gzfile(file, ""wb"") : bağlantı açılamadı
+wrapup sırasında hata: yığında o kadar çok çerçeve yok
+Error: no more error handlers available (recursive errors?); invoking 'abort' restart
+g"

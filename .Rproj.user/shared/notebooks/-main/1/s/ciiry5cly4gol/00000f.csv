@@ -1,0 +1,9 @@
+"0","    tum_xlsx_dosyalari <- list()"
+"0","    for (klasor in alt_klasorler) {"
+"0","      xlsx_dosyalari <- list.files(path = klasor, pattern = ""\\.xlsx$|\\.XLSX$"", full.names = TRUE)"
+"0","      tum_xlsx_dosyalari <- c(tum_xlsx_dosyalari, xlsx_dosyalari)"
+"0","    }"
+"0",""
+"0","    cat(""İşlenecek toplam XLSX dosya sayısı:"", length(tum_xlsx_dosyalari), ""\n"")"
+"1","İşlenecek toplam XLSX dosya sayısı: 366 
+"

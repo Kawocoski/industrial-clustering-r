@@ -1,0 +1,43 @@
+"0","# Optimal küme sayısını belirleme - Elbow Method"
+"0","set.seed(123)"
+"0","wss <- sapply(1:10, function(k) {"
+"0","  kmeans(features_scaled, k)$tot.withinss"
+"0","})"
+"2","G2;H2;Warningh: Quick-TRANSfer stage steps exceeded maximum (= 158425900)g
+"
+"2","G2;H2;Warningh: Quick-TRANSfer stage steps exceeded maximum (= 158425900)g
+"
+"0","# Silhouette analizi"
+"0","sil_scores <- sapply(2:10, function(k) {"
+"0","  km <- kmeans(features_scaled, k, nstart = 25)"
+"0","  ss <- silhouette(km$cluster, dist(features_scaled))"
+"0","  mean(ss[, 3])"
+"0","})"
+"2","G1;Hata: 37400.1 Gb boyutunda vektör ayrılamıyor
+g"
+"2","G1;wrapup sırasında hata: yığında o kadar çok çerçeve yok
+H1;Errorh: no more error handlers available (recursive errors?); invoking 'abort' restart
+g"
+"0","# K-means ile kümeleme (optimal küme sayısı = 4)"
+"0","set.seed(123)"
+"0","kmeans_result <- kmeans(features_scaled, centers = 4, nstart = 25)"
+"2","G2;H2;Warningh: Quick-TRANSfer stage steps exceeded maximum (= 158425900)g
+"
+"2","G2;H2;Warningh: Quick-TRANSfer stage steps exceeded maximum (= 158425900)g
+"
+"2","G2;H2;Warningh: Quick-TRANSfer stage steps exceeded maximum (= 158425900)g
+"
+"2","G2;H2;Warningh: Quick-TRANSfer stage steps exceeded maximum (= 158425900)g
+"
+"2","G2;H2;Warningh: Quick-TRANSfer stage steps exceeded maximum (= 158425900)g
+"
+"2","G2;H2;Warningh: Quick-TRANSfer stage steps exceeded maximum (= 158425900)g
+"
+"2","G2;H2;Warningh: Quick-TRANSfer stage steps exceeded maximum (= 158425900)g
+"
+"2","G2;H2;Warningh: Quick-TRANSfer stage steps exceeded maximum (= 158425900)g
+"
+"2","G2;H2;Warningh: Quick-TRANSfer stage steps exceeded maximum (= 158425900)g
+"
+"0","# Sonuçları ana veriye ekle"
+"0","data_clean$kmeans_cluster <- as.factor(kmeans_result$cluster)"

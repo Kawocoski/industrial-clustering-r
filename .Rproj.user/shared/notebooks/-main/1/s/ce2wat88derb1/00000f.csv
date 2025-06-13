@@ -1,0 +1,48 @@
+"0","# Tüm Excel dosyalarını oku ve birleştir"
+"0","veri_toplam <- data.frame()"
+"0","basarili_okunan <- 0"
+"0",""
+"0","for (dosya in tum_xlsx_dosyalari) {"
+"0","  # Dosyayı oku"
+"0","  temp_veri <- tryCatch({"
+"0","    read_excel(dosya)"
+"0","  }, error = function(e) {"
+"0","    cat(""Hata:"", dosya, ""dosyası okunamadı.\n"")"
+"0","    cat(""Hata mesajı:"", e$message, ""\n"")"
+"0","    return(NULL)"
+"0","  })"
+"0","  "
+"0","  if (!is.null(temp_veri)) {"
+"0","    # Sütun adlarını kontrol et ve düzelt (bazı dosyalarda sütun adları farklı olabilir)"
+"0","    if (!""Tarih-Saat"" %in% names(temp_veri) && ""Tarih"" %in% names(temp_veri)) {"
+"0","      names(temp_veri)[which(names(temp_veri) == ""Tarih"")] <- ""Tarih-Saat"""
+"0","    }"
+"0","    "
+"0","    # Dosya adı ve klasör bilgisini ekle"
+"0","    temp_veri$Dosya_Adi <- basename(dosya)"
+"0","    temp_veri$Klasor_Adi <- basename(dirname(dosya))"
+"0","    "
+"0","    # Ana veri setine ekle"
+"0","    veri_toplam <- bind_rows(veri_toplam, temp_veri)"
+"0","    basarili_okunan <- basarili_okunan + 1"
+"0","  }"
+"0","}"
+"0","cat(""Başarıyla okunan ve birleştirilen dosya sayısı:"", basarili_okunan, ""\n"")"
+"1","Baᗺrıyla okunan ve birleştirilen dosya sayısı: 366 
+"
+"0","cat(""Toplam veri satır sayısı:"", nrow(veri_toplam), ""\n\n"")"
+"1","Toplam veri satır sayısı: 3168552 
+
+"
+"0","tail(veri_toplam)"
+"2","G2;H2;Warningh in gzfile(file, ""wb"") :
+  sıkıştırılmış dosya 'C:/Users/Enis/Desktop/Yeni_veri_madencili?i_�devi/.Rproj.user/shared/notebooks/-main/1/s/ce2wat88derb1_t\_rs_rdf_1f684a7812ce.rdf' açılamadı, muhtemel sebep: Illegal byte sequenceg
+"
+"2","G1;H1;Errorh in gzfile(file, ""wb"") : bağlantı açılamadı
+wrapup sırasında hata: yığında o kadar çok çerçeve yok
+Error: no more error handlers available (recursive errors?); invoking 'abort' restart
+g"
+"0","cat(""Veri seti sütunları:"", paste(names(veri_toplam), collapse = "", ""), ""\n\n"")"
+"1","Veri seti sürı: Tarih-Saat, Giris1_Anlik, Giris1_Toplam, Giris1_Sabit_Toplam, Dosya_Adi, Klasor_Adi 
+
+"

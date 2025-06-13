@@ -1,0 +1,80 @@
+"0",""
+"0","veri_toplam$`Tarih-Saat` <- as.POSIXct(veri_toplam$`Tarih-Saat`, format=""%d-%m-%Y %H:%M:%S"")"
+"0",""
+"0","veri_toplam$`Tarih-Saat` <- ymd_hms(veri_toplam$`Tarih-Saat`)"
+"2","G2;H2;Warningh:  29 failed to parse.g
+"
+"0","veri_toplam <- veri_toplam %>%"
+"0",""
+"0","  mutate("
+"0",""
+"0","    Yil = year(`Tarih-Saat`),"
+"0",""
+"0","    Ay = month(`Tarih-Saat`),"
+"0",""
+"0","    Gun = day(`Tarih-Saat`),"
+"0",""
+"0","    Saat = hour(`Tarih-Saat`),"
+"0",""
+"0","    Dakika = minute(`Tarih-Saat`),"
+"0",""
+"0","    Haftanin_Gunu = wday(`Tarih-Saat`, label = TRUE),"
+"0",""
+"0","    Hafta_Sonu = ifelse(wday(`Tarih-Saat`) %in% c(1, 7), ""Hafta Sonu"", ""Hafta İçi"")"
+"0",""
+"0","  )"
+"0","veri_toplam <- veri_toplam %>%"
+"0","  mutate("
+"0","    Giris1_Anlik = Giris1_Anlik / 1000,"
+"0","    Giris1_Toplam = Giris1_Toplam / 1000,"
+"0","    Giris1_Sabit_Toplam = Giris1_Sabit_Toplam / 1000"
+"0","  )"
+"0",""
+"0","# Veri setinin özetini göster"
+"0",""
+"0","summary(veri_toplam)"
+"1","   Tarih-Saat                      Giris1_Anlik      Giris1_Toplam     Giris1_Sabit_Toplam  Dosya_Adi          Klasor_Adi       
+ Min.   :2024-01-01 00:00:06.00   Min.   :   3.448   Min.   :2643466   Min.   :2646177     Length:3168552     Length:3168552    
+ 1st Qu.:2024-04-01 11:30:20.00   1st Qu.:  78.276   1st Qu.:2892995   1st Qu.:2895706     Class :character   Class :character  
+ Median :2024-07-01 23:14:28.00   Median : 144.739   Median :3144913   Median :3147624     Mode  :character   Mode  :character  
+ Mean   :2024-07-01 23:31:36.55   Mean   : 153.337   Mean   :3234932   Mean   :3237643                                          
+ 3rd Qu.:2024-10-01 11:23:20.00   3rd Qu.: 203.372   3rd Qu.:3584792   3rd Qu.:3587504                                          
+ Max.   :2024-12-31 23:59:53.00   Max.   :1002.795   Max.   :3993267   Max.   :3995979                                          
+ NA's   :29                                                                                                                     
+      Yil             Ay              Gun             Saat          Dakika     Haftanin_Gunu     Hafta_Sonu       
+ Min.   :2024   Min.   : 1.000   Min.   : 1.00   Min.   : 0.0   Min.   : 0.0   Mon    :458868   Length:3168552    
+ 1st Qu.:2024   1st Qu.: 4.000   1st Qu.: 8.00   1st Qu.: 5.0   1st Qu.:15.0   Tue    :458859   Class :character  
+ Median :2024   Median : 7.000   Median :16.00   Median :11.0   Median :30.0   Sun    :450223   Mode  :character  
+ Mean   :2024   Mean   : 6.513   Mean   :15.76   Mean   :11.5   Mean   :29.5   Fri    :450220                     
+ 3rd Qu.:2024   3rd Qu.:10.000   3rd Qu.:23.00   3rd Qu.:18.0   3rd Qu.:44.0   Thu    :450218                     
+ Max.   :2024   Max.   :12.000   Max.   :31.00   Max.   :23.0   Max.   :59.0   (Other):900135                     
+ NA's   :29     NA's   :29       NA's   :29      NA's   :29     NA's   :29     NA's   :    29                     
+"
+"0","# Aykırı değerleri tespit et (Giris1_Anlik için)"
+"0",""
+"0","Q1 <- quantile(veri_toplam$Giris1_Anlik, 0.25, na.rm = TRUE)"
+"0",""
+"0","Q3 <- quantile(veri_toplam$Giris1_Anlik, 0.75, na.rm = TRUE)"
+"0",""
+"0","IQR <- Q3 - Q1"
+"0",""
+"0","alt_sinir <- Q1 - 1.5 * IQR"
+"0",""
+"0","ust_sinir <- Q3 + 1.5 * IQR"
+"0",""
+"0","outliers <- veri_toplam %>% "
+"0",""
+"0","  filter(Giris1_Anlik < alt_sinir | Giris1_Anlik > ust_sinir)"
+"0",""
+"0","veri_temiz <- veri_toplam %>%"
+"0",""
+"0","  filter(Giris1_Anlik >= alt_sinir & Giris1_Anlik <= ust_sinir)"
+"0",""
+"0","cat(""Aykırı değer sayısı:"", nrow(outliers), ""\n"")"
+"1","Aykırı deᇾr sayısı: 47788 
+"
+"0","# Herhangi bir sütunda NA olan satırları sil"
+"0","veri_toplam <- veri_toplam %>%"
+"0","  na.omit()"
+"0",""
+"0","data <- veri_toplam"

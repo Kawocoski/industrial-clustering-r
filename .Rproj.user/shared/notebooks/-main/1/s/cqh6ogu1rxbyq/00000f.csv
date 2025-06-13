@@ -1,0 +1,40 @@
+"0","# Grafikleri görüntüle"
+"0","grid.arrange(p1, p2, ncol = 2)"
+"2","G1;H1;Errorh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  : 
+  unable to start png() device
+wrapup sırasında hata: yığında o kadar çok çerçeve yok
+Error: no more error handlers available (recursive errors?); invoking 'abort' restart
+g"
+"0","grid.arrange(p3, p4, ncol = 1)"
+"2","G2;H2;Warningh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  :
+  unable to open file 'C:/Users/Enis/Desktop/Yeni_veri_madencili?i_�devi/.Rproj.user/shared/notebooks/-main/1/s/cqh6ogu1rxbyq_t/_rs_chunk_plot_001.png' for writingg
+G2;H2;Warningh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  :
+  opening device failedg
+"
+"2","G1;H1;Errorh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  : 
+  unable to start png() device
+wrapup sırasında hata: yığında o kadar çok çerçeve yok
+Error: no more error handlers available (recursive errors?); invoking 'abort' restart
+g"
+"0","grid.arrange(p5, p6, ncol = 1)"
+"2","G2;H2;Warningh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  :
+  unable to open file 'C:/Users/Enis/Desktop/Yeni_veri_madencili?i_�devi/.Rproj.user/shared/notebooks/-main/1/s/cqh6ogu1rxbyq_t/_rs_chunk_plot_001.png' for writingg
+G2;H2;Warningh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  :
+  opening device failedg
+"
+"2","G1;H1;Errorh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  : 
+  unable to start png() device
+wrapup sırasında hata: yığında o kadar çok çerçeve yok
+Error: no more error handlers available (recursive errors?); invoking 'abort' restart
+g"
+"0","grid.arrange(p7, p8, ncol = 1)"
+"2","G2;H2;Warningh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  :
+  unable to open file 'C:/Users/Enis/Desktop/Yeni_veri_madencili?i_�devi/.Rproj.user/shared/notebooks/-main/1/s/cqh6ogu1rxbyq_t/_rs_chunk_plot_001.png' for writingg
+G2;H2;Warningh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  :
+  opening device failedg
+"
+"2","G1;H1;Errorh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  : 
+  unable to start png() device
+wrapup sırasında hata: yığında o kadar çok çerçeve yok
+Error: no more error handlers available (recursive errors?); invoking 'abort' restart
+g"

@@ -1,0 +1,5 @@
+"0","p1 <- ggplot(data.frame(k = 1:10, wss = wss), aes(x = k, y = wss)) +"
+"0","  geom_line() + geom_point() +"
+"0","  labs(title = ""Elbow Method - Optimal Küme Sayısı"", "
+"0","       x = ""Küme Sayısı (k)"", y = ""Within Sum of Squares"") +"
+"0","  theme_minimal()"

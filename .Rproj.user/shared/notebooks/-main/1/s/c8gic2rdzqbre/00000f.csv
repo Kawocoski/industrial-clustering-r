@@ -1,0 +1,5 @@
+"0","p7 <- ggplot(data_clean, aes(x = Hafta_Sonu, y = Giris1_Anlik, fill = kmeans_cluster)) +"
+"0","  geom_boxplot(alpha = 0.7) +"
+"0","  labs(title = ""K-means: Hafta İçi/Sonu Debi Karşılaştırması"", "
+"0","       x = ""Hafta İçi/Sonu"", y = ""Giriş1 Anlık Debi (m³/h)"", fill = ""Küme"") +"
+"0","  theme_minimal()"

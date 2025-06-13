@@ -1,0 +1,1436 @@
+---
+title: "Son_Hali"
+output:
+  html_document:
+    self_contained: true
+    embed_resources: true
+---
+
+## Veri Madenciliği
+
+### AZIOSB Atık Su Miktarı Analizi
+
+#### İÇİNDEKİLER
+
+1.  Verilerin RSTUDIO'YA YÜKLENMESİ
+
+    1.1. Kullanılacak Kütüphanelerin Proje Dosyasına Tanıtılması
+
+    1.2. CSV Dosyalarını XLXS Türüne Dönüştürme
+
+    1.3. XLXS Türüne Dönüştürülen Veri Setini RSTUDIO'ya Yükleme
+
+    1.4. Veri Temizleme ve Hazırlama
+
+2.  Veri Görselleştirme ve Analizi
+
+    2.1. Tanımlayıcı Veri Analizi İstatistikleri
+
+    -   Günlük Ortalama Atık Miktarı Grafiği
+
+    -   Haftaiçi ve Hafta sonu Ortalama Atık Miktarı Karşılaştırması
+
+    -   Saatlik analiz (günün hangi saatinde atık miktarı daha yüksek)
+
+    -   Aylar Arası Atık Miktarı Karşılaştırması
+
+    -   Haftanın Günlerine Göre Atık Miktarı Analizi
+
+    -   Haftanın Günlerine Göre Isı Haritası
+
+#### Verileri RStudio'ya Yükleme
+
+#### 1.1. Kullanılacak Kütüphanelerin Proje Dosyasına Tanıtılması
+
+```{r}
+# Yöntem 1: Temel sessiz yükleme
+suppressPackageStartupMessages({
+  if (!require("readr", quietly = TRUE)) install.packages("readr")
+  if (!require("readxl", quietly = TRUE)) install.packages("readxl")
+  if (!require("writexl", quietly = TRUE)) install.packages("writexl")
+  if (!require("dplyr", quietly = TRUE)) install.packages("dplyr")
+  if (!require("ggplot2", quietly = TRUE)) install.packages("ggplot2")
+  if (!require("lubridate", quietly = TRUE)) install.packages("lubridate")
+  if (!require("forecast", quietly = TRUE)) install.packages("forecast")
+  if (!require("zoo", quietly = TRUE)) install.packages("zoo")
+  if (!require("scales", quietly = TRUE)) install.packages("scales")
+  if (!require("purrr", quietly = TRUE)) install.packages("purrr")
+  if (!require("stringr", quietly = TRUE)) install.packages("stringr")
+  if (!require("prophet", quietly = TRUE)) install.packages("prophet")
+  if (!require("tseries", quietly = TRUE)) install.packages("tseries")
+  
+  library(readr)
+  library(readxl)
+  library(writexl)
+  library(dplyr)
+  library(ggplot2)
+  library(lubridate)
+  library(forecast)
+  library(zoo)
+  library(scales)
+  library(purrr)
+  library(stringr)
+  library(tidyr)
+  library(prophet)
+  library(tseries)
+})
+
+# Yöntem 2: Tamamen sessiz yükleme (hiçbir mesaj yok)
+invisible({
+  capture.output({
+    suppressPackageStartupMessages({
+      suppressWarnings({
+        
+        # Gerekli paketler listesi
+        paketler <- c("readr", "readxl", "writexl", "dplyr", "ggplot2", 
+                     "lubridate", "forecast", "zoo", "scales", "purrr", 
+                     "stringr", "tidyr", "prophet", "tseries")
+        
+        # Paketleri kontrol et ve yükle
+        for(paket in paketler) {
+          if (!require(paket, character.only = TRUE, quietly = TRUE)) {
+            install.packages(paket, quiet = TRUE)
+            library(paket, character.only = TRUE, quietly = TRUE)
+          }
+        }
+      })
+    })
+  })
+})
+
+cat("Kütüphaneler hazır.\n")
+```
+
+#### 1.2. CSV Dosyalarını XLXS Türüne Dönüştürme
+
+```{r}
+
+# Sessiz çalışma modu için
+options(readr.show_progress = FALSE)
+
+ana_klasor_yolu <- "C:/Users/Enis/Desktop/AZIOSB"
+
+# Alt klasörleri bul
+alt_klasorler <- list.dirs(ana_klasor_yolu, full.names = TRUE, recursive = FALSE)
+cat("Alt klasör sayısı:", length(alt_klasorler), "\n")
+
+csv_to_xlsx_count <- 0
+toplam_csv <- 0
+
+# Önce toplam CSV sayısını hesapla
+for (klasor in alt_klasorler) {
+  csv_sayisi <- length(list.files(path = klasor, pattern = "\\.csv$|\\.CSV$"))
+  toplam_csv <- toplam_csv + csv_sayisi
+}
+
+cat("Toplam CSV dosyası:", toplam_csv, "\n")
+cat("Dönüştürme başlıyor...\n")
+
+for (klasor in alt_klasorler) {
+  csv_dosyalari <- list.files(path = klasor, pattern = "\\.csv$|\\.CSV$", full.names = TRUE)
+  
+  for (csv_dosya in csv_dosyalari) {
+    tryCatch({
+      # Tüm mesajları bastır
+      invisible(capture.output({
+        veri <- read_delim(csv_dosya, delim = ";", locale = locale(encoding = "UTF-8"), 
+                          show_col_types = FALSE, progress = FALSE)
+      }))
+      
+      dosya_adi <- basename(csv_dosya)
+      dosya_adi_xlsx <- str_replace(dosya_adi, "\\.csv$|\\.CSV$", ".xlsx")
+      xlsx_dosya_yolu <- file.path(klasor, dosya_adi_xlsx)
+      
+      write_xlsx(veri, xlsx_dosya_yolu)
+      csv_to_xlsx_count <- csv_to_xlsx_count + 1
+      
+    }, error = function(e) {
+      cat("Hata:", basename(csv_dosya), "\n")
+    })
+  }
+}
+
+cat("Tamamlandı! Toplam", csv_to_xlsx_count, "dosya dönüştürüldü.\n")
+
+```
+
+#### 1.3. XLXS Türüne Dönüştürülen Veri Setini RSTUDIO'YA YÜKLEME
+
+```{r}
+tum_xlsx_dosyalari <- list()
+for (klasor in alt_klasorler) {
+  xlsx_dosyalari <- list.files(path = klasor, pattern = "\\.xlsx$|\\.XLSX$", full.names = TRUE)
+  tum_xlsx_dosyalari <- c(tum_xlsx_dosyalari, xlsx_dosyalari)
+}
+
+cat("İşlenecek toplam XLSX dosya sayısı:", length(tum_xlsx_dosyalari), "\n")
+```
+
+```{r}
+# Tüm Excel dosyalarını oku ve birleştir
+veri_toplam <- data.frame()
+basarili_okunan <- 0
+
+for (dosya in tum_xlsx_dosyalari) {
+  # Dosyayı oku
+  temp_veri <- tryCatch({
+    read_excel(dosya)
+  }, error = function(e) {
+    cat("Hata:", dosya, "dosyası okunamadı.\n")
+    cat("Hata mesajı:", e$message, "\n")
+    return(NULL)
+  })
+  
+  if (!is.null(temp_veri)) {
+    # Sütun adlarını kontrol et ve düzelt (bazı dosyalarda sütun adları farklı olabilir)
+    if (!"Tarih-Saat" %in% names(temp_veri) && "Tarih" %in% names(temp_veri)) {
+      names(temp_veri)[which(names(temp_veri) == "Tarih")] <- "Tarih-Saat"
+    }
+    
+    # Dosya adı ve klasör bilgisini ekle
+    temp_veri$Dosya_Adi <- basename(dosya)
+    temp_veri$Klasor_Adi <- basename(dirname(dosya))
+    
+    # Ana veri setine ekle
+    veri_toplam <- bind_rows(veri_toplam, temp_veri)
+    basarili_okunan <- basarili_okunan + 1
+  }
+}
+cat("Başarıyla okunan ve birleştirilen dosya sayısı:", basarili_okunan, "\n")
+cat("Toplam veri satır sayısı:", nrow(veri_toplam), "\n\n")
+
+tail(veri_toplam)
+
+cat("Veri seti sütunları:", paste(names(veri_toplam), collapse = ", "), "\n\n")
+```
+
+#### 1.4. Veri Temizleme ve Hazırlama
+
+```{r}
+
+veri_toplam$`Tarih-Saat` <- as.POSIXct(veri_toplam$`Tarih-Saat`, format="%d-%m-%Y %H:%M:%S")
+
+veri_toplam$`Tarih-Saat` <- ymd_hms(veri_toplam$`Tarih-Saat`)
+
+veri_toplam <- veri_toplam %>%
+
+  mutate(
+
+    Yil = year(`Tarih-Saat`),
+
+    Ay = month(`Tarih-Saat`),
+
+    Gun = day(`Tarih-Saat`),
+
+    Saat = hour(`Tarih-Saat`),
+
+    Dakika = minute(`Tarih-Saat`),
+
+    Haftanin_Gunu = wday(`Tarih-Saat`, label = TRUE),
+
+    Hafta_Sonu = ifelse(wday(`Tarih-Saat`) %in% c(1, 7), "Hafta Sonu", "Hafta İçi")
+
+  )
+veri_toplam <- veri_toplam %>%
+  mutate(
+    Giris1_Anlik = Giris1_Anlik / 10000,
+    Giris1_Toplam = Giris1_Toplam / 10000,
+    Giris1_Sabit_Toplam = Giris1_Sabit_Toplam / 10000
+  )
+
+# Veri setinin özetini göster
+
+summary(veri_toplam)
+
+# Aykırı değerleri tespit et (Giris1_Anlik için)
+
+Q1 <- quantile(veri_toplam$Giris1_Anlik, 0.25, na.rm = TRUE)
+
+Q3 <- quantile(veri_toplam$Giris1_Anlik, 0.75, na.rm = TRUE)
+
+IQR <- Q3 - Q1
+
+alt_sinir <- Q1 - 1.5 * IQR
+
+ust_sinir <- Q3 + 1.5 * IQR
+
+outliers <- veri_toplam %>% 
+
+  filter(Giris1_Anlik < alt_sinir | Giris1_Anlik > ust_sinir)
+
+veri_temiz <- veri_toplam %>%
+
+  filter(Giris1_Anlik >= alt_sinir & Giris1_Anlik <= ust_sinir)
+
+cat("Aykırı değer sayısı:", nrow(outliers), "\n")
+
+# Herhangi bir sütunda NA olan satırları sil
+veri_toplam <- veri_toplam %>%
+  na.omit()
+
+summary(veri_toplam)
+```
+
+#### 2. Veri Görselleştirme Ve Analizi
+
+#### 2.1. Tanımlayıcı Veri Analizi Grafikleri
+
+##### Günlük Ortalama Atık Miktarı Grafiği
+
+```{r}
+gunluk_analiz <- veri_toplam %>%
+  group_by(Yil, Ay, Gun) %>%
+  summarise(
+    Ortalama_Anlik = mean(Giris1_Anlik, na.rm = TRUE),
+    Toplam_Gunluk_Artis = max(Giris1_Toplam) - min(Giris1_Toplam),
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(Tarih = as.Date(paste(Yil, Ay, Gun, sep = "-")))
+
+# Günlük analiz grafiği
+p1 <- ggplot(gunluk_analiz, aes(x = Tarih, y = Ortalama_Anlik)) +
+  geom_line(color = "blue") +
+  geom_smooth(method = "loess", color = "red") +
+  labs(title = "Günlük Ortalama Atık Miktarı",
+       x = "Tarih",
+       y = "Ortalama Anlık Atık") +
+  theme_minimal() +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "1 month")
+
+print(p1)
+ggsave("Gunluk_Ortalama_Atik.png", p1, width = 10, height = 6)
+
+```
+
+##### Haftaiçi ve Haftasonu Ortalama Atık Miktarı Karşılaştırması
+
+```{r}
+#Haftaiçi ve Hafta sonu Ortalama Atık Miktarı Karşılaştırması
+hafta_karsilastirma <- veri_toplam %>%
+  group_by(Hafta_Sonu) %>%
+  summarise(
+    Ortalama_Anlik = mean(Giris1_Anlik, na.rm = TRUE),
+    Std_Sapma = sd(Giris1_Anlik, na.rm = TRUE),
+    .groups = "drop"
+  )
+p3 <- ggplot(hafta_karsilastirma, aes(x = Hafta_Sonu, y = Ortalama_Anlik, fill = Hafta_Sonu)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = Ortalama_Anlik - Std_Sapma, 
+                   ymax = Ortalama_Anlik + Std_Sapma), 
+               width = 0.2) +
+  labs(title = "Hafta İçi vs Hafta Sonu Atık Karşılaştırması",
+       x = "",
+       y = "Ortalama Anlık Atık") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set1")
+
+print(p3)
+```
+
+##### Saatlik Analiz (günün hangi saatinde atık miktarı daha yüksek)
+
+```{r}
+#Saatlik analiz (günün hangi saatinde atık miktarı daha yüksek)
+saatlik_analiz <- veri_toplam %>%
+  group_by(Saat) %>%
+  summarise(
+    Ortalama_Anlik = mean(Giris1_Anlik, na.rm = TRUE),
+    Std_Sapma = sd(Giris1_Anlik, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+p4 <- ggplot(saatlik_analiz, aes(x = Saat, y = Ortalama_Anlik)) +
+  geom_line(color = "purple", size = 1) +
+  geom_point(size = 2) +
+  geom_ribbon(aes(ymin = Ortalama_Anlik - Std_Sapma, 
+                 ymax = Ortalama_Anlik + Std_Sapma), 
+             alpha = 0.2) +
+  labs(title = "Günün Saatlerine Göre Atık Miktarı",
+       x = "Saat",
+       y = "Ortalama Anlık Atık") +
+  theme_minimal() +
+  scale_x_continuous(breaks = 0:23)
+
+print(p4)
+```
+
+##### Aylar Arası Atık Miktarı Karşılaştırması
+
+```{r}
+#Aylar Arası Atık Miktarı Karşılaştırması
+aylik_analiz <- veri_toplam %>%
+  group_by(Yil, Ay) %>%
+  summarise(
+    Ortalama_Anlik = mean(Giris1_Anlik, na.rm = TRUE),
+    Toplam_Artis = sum(Giris1_Anlik, na.rm = TRUE ),
+    .groups = "drop"
+  ) %>%
+  mutate(Ay_Adi = month.abb[Ay],
+         Ay_Yil = paste(Ay_Adi, Yil))
+
+p_aylik <- ggplot(aylik_analiz, aes(x = reorder(Ay_Yil, Yil*100 + Ay), y = Ortalama_Anlik, group = 1)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Aylık Ortalama Atık Miktarı",
+       x = "",
+       y = "Ortalama Anlık Atık") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p_aylik)
+ggsave("Aylik_Ortalama_Atik.png", p_aylik, width = 12, height = 6)
+
+```
+
+##### Haftanın Günlerine Göre Atık Miktarı Analizi
+
+```{r}
+# Haftanın Günlerine Göre Atık Miktarı Analizi
+gunler_analiz <- veri_toplam %>%
+  group_by(Haftanin_Gunu) %>%
+  summarise(
+    Ortalama_Anlik = mean(Giris1_Anlik, na.rm = TRUE),
+    Std_Sapma = sd(Giris1_Anlik, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+p_gunler <- ggplot(gunler_analiz, aes(x = Haftanin_Gunu, y = Ortalama_Anlik, fill = Haftanin_Gunu)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = Ortalama_Anlik - Std_Sapma, 
+                   ymax = Ortalama_Anlik + Std_Sapma), 
+               width = 0.2) +
+  labs(title = "Haftanın Günlerine Göre Ortalama Atık Miktarı",
+       x = "",
+       y = "Ortalama Anlık Atık") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+print(p_gunler)
+ggsave("Gunlere_Gore_Ortalama_Atik.png", p_gunler, width = 10, height = 6)
+
+```
+
+##### Haftanın Günlerine Göre Isı Haritası
+
+```{r}
+#Haftanın Günlerine Göre Isı Haritası
+isik_haritasi <- veri_toplam %>%
+  group_by(Haftanin_Gunu, Saat) %>%
+  summarise(
+    Ortalama_Anlik = mean(Giris1_Anlik, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+p_isik <- ggplot(isik_haritasi, aes(x = factor(Saat), y = Haftanin_Gunu, fill = Ortalama_Anlik)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(title = "Gün ve Saatlere Göre Atık Miktarı Isı Haritası",
+       x = "Saat",
+       y = "",
+       fill = "Ortalama\nAnlık Atık") +
+  theme_minimal() +
+  scale_x_discrete(breaks = c(0, 6, 12, 18, 23))
+
+print(p_isik)
+ggsave("Gun_Saat_Isi_Haritasi.png", p_isik, width = 10, height = 6)
+```
+
+#### ARIMA
+
+##### Zaman Serisi
+
+```{r}
+## zaman zerisini oluşturduk
+deneme_zs <- ts(gunluk_analiz$Ortalama_Anlik, start = (min(veri_toplam$Yil, min(veri_toplam$Ay))), frequency = 12)
+###
+decomp <- stl(deneme_zs, s.window = "periodic")
+```
+
+##### Verileri Ayrıştırma
+
+```{r}
+# Ayrıştırma sonuçlarını bir veri çerçevesine dönüştür
+deneme_decomp_df <- data.frame(
+  Tarih = gunluk_analiz$Tarih,
+  Observed = decomp$time.series[,1] + decomp$time.series[,2] + decomp$time.series[,3],
+  Trend = decomp$time.series[,2],
+  Seasonal = decomp$time.series[,1],
+  Random = decomp$time.series[,3]
+)
+```
+
+##### Mevsimsel, Rastgele ve Trend Bileşenleri
+
+##### Trend
+
+```{r}
+# Mevsimsel, trend ve rastgele bileşenleri çizdir
+p_decomp_deneme <- ggplot() +
+  geom_line(data = deneme_decomp_df, aes(x = Tarih, y = Observed), color = "black") +
+  geom_line(data = deneme_decomp_df, aes(x = Tarih, y = Trend), color = "blue", size = 1) +
+  labs(title = "Atık Miktarı Zaman Serisi ve Trend",
+       x = "Tarih",
+       y = "Atık Miktarı") +
+  theme_minimal()
+
+print(p_decomp_deneme)
+ggsave("Deneme_Zaman_Serisi_Trend.png", p_decomp_deneme, width = 10, height = 6)
+```
+
+##### Mevsimsellik
+
+```{r}
+# Mevsimsellik grafiği
+p_seasonal_deneme <- ggplot(deneme_decomp_df, aes(x = Tarih, y = Seasonal)) +
+  geom_line(color = "black") +
+  labs(title = "Mevsimsel Bileşen",
+       x = "Tarih",
+       y = "Mevsimsel Etki") +
+  theme_minimal()
+
+print(p_seasonal_deneme)
+ggsave("Deneme_Mevsimsel_Bilesen.png", p_seasonal_deneme, width = 10, height = 4)
+```
+
+##### Rastgele Bileşen
+
+```{r}
+p_random_deneme <- ggplot(deneme_decomp_df, aes(x = Tarih, y = Random)) +
+  geom_line(color = "red") +
+  labs(title = "Rastgele Bileşen",
+       x = "Tarih",
+       y = "Rastgele Değişim") +
+  theme_minimal()
+
+print(p_random_deneme)
+ggsave("deneme_Rastgele_Bilesen.png", p_random_deneme, width = 10, height = 4)
+```
+
+##### ADF Testi (Durağanlık Ölçümü)
+
+H0: Seri Durağan Değildir.
+
+H1: Seri Durağandır.
+
+```{r}
+adf.test(deneme_zs)
+# p değeri 0.09967 çıktı. p>0,05 olduğundan dolayı H0 kabul. Seri durağan değildir. O  halde mevsimsellik bulunduğuna göre zaman serisine SARIMA modellemesi kullanacağız.
+```
+
+H0 kabul olduğundan dolayı burada seri durağan değildir yani Differencing (I bileşeni) gereklidir. Mevsimsellik grafiğini de incelediğimizde mevsimselliğin olduğu gözükmektedir. O halde ;
+
+```{r}
+auto_sarima <- auto.arima(deneme_zs,
+                          seasonal = TRUE,
+                          stepwise = FALSE,
+                          approximation = FALSE)
+
+print(auto_sarima)
+```
+
+auto.arima fonksiyonun bize verdiği modele göre ARIMA(1,1,4)\
+p=1 : 1 autoregressive (AR) terimi\
+d=1 : 1 kez differencing (seri 1 kez fark alınarak durağan hale getirildi.)\
+q=4 : 4 moving average (MA) terimi
+
+Katsayıların Analizi:
+
+AR Katsayısı:
+
+-   AR1 = -0,7248: Negatif ve güçlü, önceki değerin ters yönde etkisi var.
+
+MA Katsayıları:
+
+-   MA1 = 0,0862 : Zayıf pozitif etki
+
+-   MA2 = -0,6634 : Güçlü negatif etki (en önemli MA terimi)
+
+-   MA3 = - 0,0774 : Zayıf negatif etki
+
+-   MA4 = -0,1024 : Zayıf negatif etki
+
+Katsayıların Anlamlışı
+
+AR1: \|-0.7248/0.1025\| = 7.07 ✓ (Çok anlamlı) MA1: \|0.0862/0.1107\| = 0.78 ✗ (Anlamlı değil) MA2: \|-0.6634/0.0786\| = 8.44 ✓ (Çok anlamlı) MA3: \|-0.0774/0.0679\| = 1.14 ✗ (Anlamlı değil) MA4: \|-0.1024/0.0563\| = 1.82 ✗ (Sınırda)
+
+Model Kalitesi:
+
+-   AIC = 2094,46 : Model karşılaştrıması için (düşük olması daha iyi)
+
+-   BIC = 2117,86 : Daha az parametre tercih eder
+
+-   sigma\^2 = 17,77 : Hata varyansı
+
+Yorum: Model genel olarak iyi (AR1 ve MA2 güçlü ve anlamlı) fakat MA1, MA3 MA4 zayıf bu da bize daha basit bir model ile karşılaştırmamız gerektiğini gösteriyor.
+
+Alternatif Test:
+
+```{r}
+arima_simple <- arima(deneme_zs, order = c(1,1,2))
+AIC(arima_simple)  # Bu modelle karşılaştır
+```
+
+SARIMA tek başına yeterli değildir çünkü;
+
+$$
+Model~ Fitting \neq Model ~Quality \\AIC~düşük~ olması \neq Residual'lar ~temiz \\ Parametreler~Anlamlı \neq Varsayımlar~ Sağlanıyor~
+$$
+
+Residual Analizi olmadan model kullanılırsa ;
+
+$$
+Yanlış~Tahminler\\ Güvenilmez~confidence~interval'ler\\Bias'lı~sonuçlar~ortaya~çıkabilir.~Bu~yüzden~her~zaman~residual~analizi~yapmalıyız!
+$$
+
+collapse="-"), "\\n")
+
+cat("Test dönemi:", paste(start(test_data), collapse="-"), "ile",
+
+paste(end(test_data), collapse="-"), "\\n")
+
+\# 3. MODEL EĞİTİMİ (Sadece train verisi)
+
+cat("\\n=== MODEL EĞİTİMİ ===\\n")
+
+cat("Model sadece train verisi üzerinde eğitiliyor...\\n")
+
+auto_arima_train \<- auto.arima(train_data,
+
+seasonal = TRUE,
+
+stepwise = FALSE,
+
+approximation = FALSE)
+
+cat("Eğitilen model:\\n")
+
+print(auto_arima_train)
+
+\# 4. TAHMİN (Test periyodu kadar)
+
+cat("\\n=== TAHMİN YAPILIYOR ===\\n")
+
+forecast_test \<- forecast(auto_arima_train, h = test_size)
+
+cat("Test periyodu için", test_size, "adım tahmin yapıldı\\n")
+
+\# 5. PERFORMANS DEĞERLENDİRMESİ
+
+cat("\\n=== PERFORMANS KARŞILAŞTIRMASI ===\\n")
+
+\# Train performansı
+
+train_accuracy \<- accuracy(auto_arima_train)
+
+cat("TRAIN SETİ PERFORMANSI:\\n")
+
+print(train_accuracy)
+
+\# Test performansı (GERÇEKLEŞTİRİLEN TEST)
+
+test_accuracy \<- accuracy(forecast_test, test_data)
+
+cat("\\nTEST SETİ PERFORMANSI:\\n")
+
+print(test_accuracy)
+
+\# Karşılaştırma
+
+train_rmse \<- train_accuracy\[2\] \# RMSE
+
+test_rmse \<- test_accuracy\[1,2\] \# Test RMSE
+
+cat("\\n=== OVERFITTING KONTROLÜ ===\\n")
+
+cat("Train RMSE:", round(train_rmse, 4), "\\n")
+
+cat("Test RMSE:", round(test_rmse, 4), "\\n")
+
+cat("Test/Train RMSE oranı:", round(test_rmse/train_rmse, 2), "\\n")
+
+if(test_rmse \> train_rmse \* 1.5) {
+
+cat("️ UYARI: OVERFITTING riski yüksek!\\n")
+
+cat(" Model train verisini ezberliyor olabilir\\n")
+
+} else if(test_rmse \> train_rmse \* 1.2) {
+
+cat(" DİKKAT: Hafif overfitting var\\n")
+
+} else {
+
+cat(" Model sağlıklı - Overfitting yok\\n")
+
+}
+
+\# 6. GÖRSEL KARŞILAŞTIRMA
+
+cat("\\n=== GÖRSELLEŞTİRME ===\\n")
+
+\# Tüm veriyi birleştir
+
+all_time \<- time(deneme_zs)
+
+train_time \<- head(all_time, train_size)
+
+test_time \<- tail(all_time, test_size)
+
+\# Grafik verisi oluştur
+
+plot_data \<- data.frame(
+
+time = c(train_time, test_time),
+
+actual = as.numeric(deneme_zs),
+
+type = c(rep("Train", train_size), rep("Test", test_size)),
+
+forecast = c(rep(NA, train_size), as.numeric(forecast_test\$mean)),
+
+lower_95 = c(rep(NA, train_size), as.numeric(forecast_test\$lower\[,2\])),
+
+upper_95 = c(rep(NA, train_size), as.numeric(forecast_test\$upper\[,2\]))
+
+)
+
+\# Ana grafik
+
+p_main \<- ggplot(plot_data, aes(x = time)) +
+
+\# Güven aralığı
+
+geom_ribbon(aes(ymin = lower_95, ymax = upper_95),
+
+fill = "lightblue", alpha = 0.3, na.rm = TRUE) +
+
+\# Gerçek değerler
+
+geom_line(aes(y = actual, color = type), size = 1) +
+
+\# Tahminler
+
+geom_line(aes(y = forecast), color = "red", size = 1, na.rm = TRUE) +
+
+\# Dikey çizgi (train/test ayrımı)
+
+geom_vline(xintercept = max(train_time), linetype = "dashed", color = "gray50") +
+
+scale_color_manual(values = c("Train" = "blue", "Test" = "black")) +
+
+ggtitle("Zaman Serisi: Train/Test Ayrımı ve Tahminler") +
+
+xlab("Zaman") +
+
+ylab("Değer") +
+
+theme_minimal() +
+
+theme(legend.position = "bottom")
+
+print(p_main)
+
+\# 7. HATA ANALİZİ
+
+forecast_errors \<- as.numeric(test_data) - as.numeric(forecast_test\$mean)
+
+cat("\\n=== DETAYLI HATA METRİKLERİ ===\\n")
+
+cat("MAE (Mean Absolute Error):", round(mean(abs(forecast_errors)), 4), "\\n")
+
+cat("RMSE (Root Mean Square Error):", round(sqrt(mean(forecast_errors\^2)), 4), "\\n")
+
+cat("MAPE (Mean Absolute Percentage Error):",
+
+round(mean(abs(forecast_errors/as.numeric(test_data))\*100), 2), "%\\n")
+
+\# Hata dağılımı
+
+error_df \<- data.frame(errors = forecast_errors)
+
+p_errors \<- ggplot(error_df, aes(x = errors)) +
+
+geom_histogram(bins = 20, fill = "lightcoral", alpha = 0.7) +
+
+geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
+
+ggtitle("Tahmin Hatalarının Dağılımı") +
+
+xlab("Hata") +
+
+ylab("Frekans") +
+
+theme_minimal()
+
+print(p_errors)
+
+\# 8. RESIDUAL ANALİZİ (Train verisi için)
+
+cat("\\n=== RESİDUAL ANALİZİ (TRAIN) ===\\n")
+
+residuals_train \<- residuals(auto_arima_train)
+
+\# Ljung-Box test
+
+ljung_test \<- Box.test(residuals_train, lag = 10, type = "Ljung-Box")
+
+cat("Ljung-Box test p-value:", round(ljung_test\$p.value, 4), "\\n")
+
+if(ljung_test\$p.value \> 0.05) {
+
+cat("Residuals'da otokorelasyon YOK\\n")
+
+} else {
+
+cat("Residuals'da otokorelasyon VAR - Model yetersiz\\n")
+
+}
+
+\# 9. SONUÇ ÖZETİ
+
+cat("\\n" , "="\*50, "\\n")
+
+cat("SONUÇ ÖZETİ\\n")
+
+cat("="\*50, "\\n")
+
+cat("Model Tipi:", paste(auto_arima_train\$arma\[c(1,6,2,3,7,4,5)\], collapse=","), "\\n")
+
+cat("Train RMSE:", round(train_rmse, 4), "\\n")
+
+cat("Test RMSE:", round(test_rmse, 4), "\\n")
+
+cat("Model Güvenilirliği:",
+
+ifelse(test_rmse \<= train_rmse \* 1.2, "Yüksek ", "Düşük "), "\\n")
+
+cat("Residual Kalitesi:",
+
+ifelse(ljung_test\$p.value \> 0.05, "İyi", "Kötü "), "\\n")
+
+\# 10. TAVSİYELER
+
+cat("\\nTAVSİYELER:\\n")
+
+if(test_rmse \> train_rmse \* 1.5) {
+
+cat("- Model çok karmaşık, daha basit model deneyin\\n")
+
+cat("- Veri ön işleme adımlarını gözden geçirin\\n")
+
+}
+
+if(ljung_test\$p.value \<= 0.05) {
+
+cat("- Farklı ARIMA parametreleri deneyin\\n")
+
+cat("- Mevsimsel diferansiyasyon ekleyin\\n")
+
+}
+
+if(test_rmse \<= train_rmse \* 1.1) {
+
+cat("- Model çok başarılı! \\n")
+
+cat("- Üretim ortamında kullanılabilir\\n")
+
+}
+
+```{r}
+# =============================================================================
+# ZAMAN SERİSİ ANALİZİ - EKSİKSİZ RESIDUAL ANALİZİ İLE
+# =============================================================================
+
+# Gerekli kütüphaneler
+library(forecast)
+library(ggplot2)
+library(gridExtra)
+
+# 1. VERİ BÖLÜNMESİ (Kronolojik sırayı koruyarak)
+cat("=== VERİ BÖLÜNME STRATEJİSİ ===\n")
+n <- length(deneme_zs)
+cat("Toplam gözlem sayısı:", n, "\n")
+
+# Zaman serisi için önerilen bölünme stratejileri:
+# Strateji 1: %80-20 (genel)
+train_size_80 <- floor(0.8 * n)
+
+# Strateji 2: Son 12 ay test (aylık veri için)
+train_size_12m <- n - 12
+
+# Strateji 3: Son 1 yıl test (yıllık veri için) 
+train_size_1y <- n - 1
+
+# Hangi stratejiyi seçeceğinize karar verin
+cat("Seçenekler:\n")
+cat("1. %80 Train (%20 Test):", train_size_80, "vs", n - train_size_80, "\n")
+cat("2. Son 12 ay Test:", train_size_12m, "vs", 12, "\n")
+cat("3. Son 1 yıl Test:", train_size_1y, "vs", 1, "\n")
+
+# En uygun olanı seçin (örnek: son 12 ay)
+train_size <- train_size_12m
+test_size <- n - train_size
+
+cat("\nSeçilen strateji: Son", test_size, "periode test\n")
+cat("Train:", train_size, "gözlem\n")
+cat("Test:", test_size, "gözlem\n")
+
+# 2. VERİ AYIRMA (Zaman sırasını koruyarak)
+train_data <- head(deneme_zs, train_size)
+test_data <- tail(deneme_zs, test_size)
+
+# Zaman aralıklarını kontrol et
+cat("Train dönemi:", paste(start(train_data), collapse="-"), "ile", 
+    paste(end(train_data), collapse="-"), "\n")
+cat("Test dönemi:", paste(start(test_data), collapse="-"), "ile", 
+    paste(end(test_data), collapse="-"), "\n")
+
+# 3. MODEL EĞİTİMİ (Sadece train verisi)
+cat("\n=== MODEL EĞİTİMİ ===\n")
+cat("Model sadece train verisi üzerinde eğitiliyor...\n")
+
+auto_arima_train <- auto.arima(train_data, 
+                               seasonal = TRUE, 
+                               stepwise = FALSE, 
+                               approximation = FALSE)
+
+cat("Eğitilen model:\n")
+print(auto_arima_train)
+
+# 4. TAHMİN (Test periyodu kadar)
+cat("\n=== TAHMİN YAPILIYOR ===\n")
+forecast_test <- forecast(auto_arima_train, h = test_size)
+cat("Test periyodu için", test_size, "adım tahmin yapıldı\n")
+
+# 5. PERFORMANS DEĞERLENDİRMESİ
+cat("\n=== PERFORMANS KARŞILAŞTIRMASI ===\n")
+
+# Train performansı
+train_accuracy <- accuracy(auto_arima_train)
+cat("TRAIN SETİ PERFORMANSI:\n")
+print(train_accuracy)
+
+# Test performansı (GERÇEKLEŞTİRİLEN TEST)
+test_accuracy <- accuracy(forecast_test, test_data)
+cat("\nTEST SETİ PERFORMANSI:\n")
+print(test_accuracy)
+
+# Karşılaştırma
+train_rmse <- train_accuracy[2]  # RMSE
+test_rmse <- test_accuracy[1,2]  # Test RMSE
+
+cat("\n=== OVERFITTING KONTROLÜ ===\n")
+cat("Train RMSE:", round(train_rmse, 4), "\n")
+cat("Test RMSE:", round(test_rmse, 4), "\n")
+cat("Test/Train RMSE oranı:", round(test_rmse/train_rmse, 2), "\n")
+
+if(test_rmse > train_rmse * 1.5) {
+  cat("⚠️  UYARI: OVERFITTING riski yüksek!\n")
+  cat("   Model train verisini ezberliyor olabilir\n")
+} else if(test_rmse > train_rmse * 1.2) {
+  cat("⚠️ DİKKAT: Hafif overfitting var\n")
+} else {
+  cat("✅ Model sağlıklı - Overfitting yok\n")
+}
+
+# 6. GÖRSEL KARŞILAŞTIRMA
+cat("\n=== GÖRSELLEŞTİRME ===\n")
+
+# Tüm veriyi birleştir
+all_time <- time(deneme_zs)
+train_time <- head(all_time, train_size)
+test_time <- tail(all_time, test_size)
+
+# Grafik verisi oluştur
+plot_data <- data.frame(
+  time = c(train_time, test_time),
+  actual = as.numeric(deneme_zs),
+  type = c(rep("Train", train_size), rep("Test", test_size)),
+  forecast = c(rep(NA, train_size), as.numeric(forecast_test$mean)),
+  lower_95 = c(rep(NA, train_size), as.numeric(forecast_test$lower[,2])),
+  upper_95 = c(rep(NA, train_size), as.numeric(forecast_test$upper[,2]))
+)
+
+# Ana grafik
+p_main <- ggplot(plot_data, aes(x = time)) +
+  # Güven aralığı
+  geom_ribbon(aes(ymin = lower_95, ymax = upper_95), 
+              fill = "lightblue", alpha = 0.3, na.rm = TRUE) +
+  # Gerçek değerler
+  geom_line(aes(y = actual, color = type), size = 1) +
+  # Tahminler
+  geom_line(aes(y = forecast), color = "red", size = 1, na.rm = TRUE) +
+  # Dikey çizgi (train/test ayrımı)
+  geom_vline(xintercept = max(train_time), linetype = "dashed", color = "gray50") +
+  scale_color_manual(values = c("Train" = "blue", "Test" = "black")) +
+  ggtitle("Zaman Serisi: Train/Test Ayrımı ve Tahminler") +
+  xlab("Zaman") +
+  ylab("Değer") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+print(p_main)
+
+# 7. HATA ANALİZİ
+forecast_errors <- as.numeric(test_data) - as.numeric(forecast_test$mean)
+
+cat("\n=== DETAYLI HATA METRİKLERİ ===\n")
+cat("MAE (Mean Absolute Error):", round(mean(abs(forecast_errors)), 4), "\n")
+cat("RMSE (Root Mean Square Error):", round(sqrt(mean(forecast_errors^2)), 4), "\n")
+cat("MAPE (Mean Absolute Percentage Error):", 
+    round(mean(abs(forecast_errors/as.numeric(test_data))*100), 2), "%\n")
+
+# Hata dağılımı
+error_df <- data.frame(errors = forecast_errors)
+p_errors <- ggplot(error_df, aes(x = errors)) +
+  geom_histogram(bins = 20, fill = "lightcoral", alpha = 0.7) +
+  geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
+  ggtitle("Tahmin Hatalarının Dağılımı") +
+  xlab("Hata") +
+  ylab("Frekans") +
+  theme_minimal()
+
+print(p_errors)
+
+# =============================================================================
+# 8. EKSİKSİZ RESIDUAL ANALİZİ (TRAIN verisi için)
+# =============================================================================
+cat("\n=== EKSİKSİZ RESİDUAL ANALİZİ (TRAIN) ===\n")
+residuals_train <- residuals(auto_arima_train)
+
+# 8.1 Ljung-Box Test
+ljung_test <- Box.test(residuals_train, lag = 10, type = "Ljung-Box")
+cat("Ljung-Box test p-value:", round(ljung_test$p.value, 4), "\n")
+
+if(ljung_test$p.value > 0.05) {
+  cat(" Residuals'da otokorelasyon YOK\n")
+} else {
+  cat(" Residuals'da otokorelasyon VAR - Model yetersiz\n")
+}
+
+# 8.2 Shapiro-Wilk Normallik Testi
+shapiro_test <- shapiro.test(residuals_train)
+cat("Shapiro-Wilk test p-value:", round(shapiro_test$p.value, 4), "\n")
+
+if(shapiro_test$p.value > 0.05) {
+  cat(" Residuals normal dağılımlı\n")
+} else {
+  cat(" Residuals normal dağılımlı DEĞİL\n")
+}
+
+# 8.3 RESİDUAL GRAFİKLERİ (4'lü panel)
+
+# ACF Plot
+p_acf <- ggAcf(residuals_train, lag.max = 20) + 
+  ggtitle("ACF of Residuals") + 
+  theme_minimal()
+
+# PACF Plot  
+p_pacf <- ggPacf(residuals_train, lag.max = 20) + 
+  ggtitle("PACF of Residuals") + 
+  theme_minimal()
+
+# Q-Q Plot
+residuals_df <- data.frame(residuals = as.numeric(residuals_train))
+p_qq <- ggplot(residuals_df, aes(sample = residuals)) +
+  stat_qq() + 
+  stat_qq_line(color = "red") +
+  ggtitle("Q-Q Plot of Residuals") +
+  xlab("Theoretical Quantiles") +
+  ylab("Sample Quantiles") +
+  theme_minimal()
+
+# Residuals vs Time
+time_residuals <- data.frame(
+  time = as.numeric(time(residuals_train)),
+  residuals = as.numeric(residuals_train)
+)
+p_res_time <- ggplot(time_residuals, aes(x = time, y = residuals)) +
+  geom_line(color = "blue") +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  ggtitle("Residuals vs Time") +
+  xlab("Time") +
+  ylab("Residuals") +
+  theme_minimal()
+
+# Residuals Histogram
+p_res_hist <- ggplot(residuals_df, aes(x = residuals)) +
+  geom_histogram(aes(y = ..density..), bins = 20, fill = "lightblue", alpha = 0.7) +
+  geom_density(color = "red", size = 1) +
+  stat_function(fun = dnorm, 
+                args = list(mean = mean(residuals_train), 
+                           sd = sd(residuals_train)),
+                color = "blue", linetype = "dashed") +
+  ggtitle("Residuals Histogram with Normal Curve") +
+  xlab("Residuals") +
+  ylab("Density") +
+  theme_minimal()
+
+# Tüm residual grafiklerini göster
+cat("\n=== RESİDUAL GRAFİKLERİ ===\n")
+
+# SEÇENEK 1: Grafikleri ayrı ayrı yazdır (daha büyük)
+cat("1. ACF of Residuals:\n")
+print(p_acf)
+
+cat("2. PACF of Residuals:\n") 
+print(p_pacf)
+
+cat("3. Q-Q Plot:\n")
+print(p_qq)
+
+cat("4. Residuals vs Time:\n")
+print(p_res_time)
+
+cat("5. Residuals Histogram:\n")
+print(p_res_hist)
+
+# SEÇENEK 2: Temiz paneller (başlıksız)
+# grid.arrange(p_acf, p_pacf, ncol = 2)
+# grid.arrange(p_qq, p_res_time, ncol = 2)
+
+# 8.4 Residual İstatistikleri
+cat("\n=== RESİDUAL İSTATİSTİKLERİ ===\n")
+cat("Ortalama:", round(mean(residuals_train), 6), "\n")
+cat("Standart Sapma:", round(sd(residuals_train), 4), "\n")
+cat("Çarpıklık (Skewness):", round(e1071::skewness(residuals_train), 4), "\n")
+cat("Basıklık (Kurtosis):", round(e1071::kurtosis(residuals_train), 4), "\n")
+
+# 9. SONUÇ ÖZETİ
+cat("\n", rep("=", 50), "\n")
+cat("SONUÇ ÖZETİ\n")
+cat(rep("=", 50), "\n")
+cat("Model Tipi:", paste(auto_arima_train$arma[c(1,6,2,3,7,4,5)], collapse=","), "\n")
+cat("Train RMSE:", round(train_rmse, 4), "\n")
+cat("Test RMSE:", round(test_rmse, 4), "\n")
+cat("Model Güvenilirliği:", 
+    ifelse(test_rmse <= train_rmse * 1.2, "Yüksek ", "Düşük "), "\n")
+cat("Residual Otokorelasyon:", 
+    ifelse(ljung_test$p.value > 0.05, "Temiz ", "Problemli "), "\n")
+cat("Residual Normallik:", 
+    ifelse(shapiro_test$p.value > 0.05, "Normal ", "Normal Değil "), "\n")
+
+# 10. TAVSİYELER
+cat("\nTAVSİYELER:\n")
+if(test_rmse > train_rmse * 1.5) {
+  cat("- Model çok karmaşık, daha basit model deneyin\n")
+  cat("- Veri ön işleme adımlarını gözden geçirin\n")
+}
+if(ljung_test$p.value <= 0.05) {
+  cat("- Farklı ARIMA parametreleri deneyin\n")
+  cat("- Mevsimsel diferansiyasyon ekleyin\n")
+  cat("- ACF/PACF grafiklerine bakarak eksik lag'leri tespit edin\n")
+}
+if(shapiro_test$p.value <= 0.05) {
+  cat("- Veri transformasyonu (log, Box-Cox) deneyin\n")
+  cat("- Aykırı değerleri kontrol edin\n")
+}
+if(test_rmse <= train_rmse * 1.1 && ljung_test$p.value > 0.05) {
+  cat("- Model çok başarılı! \n")
+  cat("- Üretim ortamında kullanılabilir\n")
+}
+
+cat("\n=== ARIMA MODEL VALİDASYONU TAMAMLANDI ===\n")
+```
+
+##### Prophet
+
+-   Veri Hazırlama
+
+```{r}
+print("\nBLOK 2: Günlük veri aylık hale getiriliyor...")
+
+aylik_prophet_veri <- gunluk_analiz %>%
+  mutate(
+    Yil = year(Tarih),
+    Ay = month(Tarih)
+  ) %>%
+  group_by(Yil, Ay) %>%
+  reframe(  
+    Tarih = as.Date(paste(Yil, Ay, "01", sep = "-")),
+    Ortalama_Anlik = mean(Ortalama_Anlik, na.rm = TRUE)
+  ) %>%
+  arrange(Tarih) %>%
+  filter(!is.na(Ortalama_Anlik))
+```
+
+-   Veri Kontrolü ve Özet
+
+```{r}
+print("\nBLOK 3: Veri özeti kontrol ediliyor...")
+
+print("Aylık Prophet Verisi Özeti:")
+print(paste("Toplam gözlem sayısı:", nrow(aylik_prophet_veri)))
+print(paste("Tarih aralığı:", min(aylik_prophet_veri$Tarih), "ile", max(aylik_prophet_veri$Tarih)))
+print("İlk 6 satır:")
+print(head(aylik_prophet_veri))
+
+print("✓ Veri kontrolü tamamlandı!")
+```
+
+-   Prophet Formatına Çevirme
+
+```{r}
+print("\nBLOK 4: Veri Prophet formatına çevriliyor...")
+
+prophet_df <- aylik_prophet_veri %>%
+  select(Tarih, Ortalama_Anlik) %>%
+  rename(ds = Tarih, y = Ortalama_Anlik)
+
+print("✓ Prophet formatı hazırlandı (ds = tarih, y = değer)")
+```
+
+-   Prophet Model Konfigürasyonu ve Model Eğitimi
+
+```{r}
+print("\nBLOK 6: Prophet modeli eğitiliyor...")
+
+prophet_model <- prophet(
+  df = prophet_df,
+  yearly.seasonality = TRUE,
+  weekly.seasonality = FALSE,
+  daily.seasonality = FALSE,
+  n.changepoints = min(20, floor(nrow(prophet_df) / 4)),
+  changepoint.range = 0.8,
+  changepoint.prior.scale = 0.05,
+  seasonality.prior.scale = 10,
+  seasonality.mode = 'additive',
+  interval.width = 0.95,
+  growth = 'linear'
+)
+
+print("✓ Prophet modeli başarıyla eğitildi!")
+```
+
+-   Gelecek Tahmin Çerçevesi
+
+```{r}
+print("\nBLOK 7: Gelecek tahmin çerçevesi hazırlanıyor...")
+
+gelecek_aylar <- 24
+future_df <- make_future_dataframe(prophet_model, periods = gelecek_aylar, freq = "month")
+
+print(paste("✓ Gelecek", gelecek_aylar, "ay için tahmin çerçevesi hazırlandı"))
+print(paste("Toplam tahmin dönemi:", nrow(future_df), "gözlem"))
+
+```
+
+-   Tahmin Yapma
+
+```{r}
+print("\nBLOK 8: Prophet tahmini yapılıyor...")
+
+prophet_forecast <- predict(prophet_model, future_df)
+
+print("✓ Prophet tahmini tamamlandı!")
+```
+
+-   Ana Grafik Oluşturma
+
+```{r}
+print("\nBLOK 9: Ana tahmin grafiği oluşturuluyor...")
+
+png("prophet_forecast_aylik.png", width = 1400, height = 800, res = 100)
+plot(prophet_model, prophet_forecast) +
+  ggtitle("Prophet Aylık Ortalama Atık Miktarı Tahmini") +
+  xlab("Tarih") +
+  ylab("Ortalama Anlık Değer") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+dev.off()
+
+print("✓ Ana grafik 'prophet_forecast_aylik.png' olarak kaydedildi!")
+
+```
+
+-   Bileşen Graikleri
+
+```{r}
+print("\nBLOK 10: Bileşen grafikleri oluşturuluyor...")
+
+png("prophet_components_aylik.png", width = 1400, height = 1000, res = 100)
+prophet_plot_components(prophet_model, prophet_forecast)
+dev.off()
+
+print("✓ Bileşen grafikleri 'prophet_components_aylik.png' olarak kaydedildi!")
+print("- Trend bileşeni gösterildi")
+print("- Yıllık mevsimsellik bileşeni gösterildi")
+
+```
+
+-   Model Performans Analizi
+
+```{r}
+print("\nBLOK 11: Model performansı değerlendiriliyor...")
+
+# Mevcut veriler için tahmin kalitesi
+gercek_values <- prophet_df$y
+tahmin_values <- prophet_forecast$yhat[1:length(gercek_values)]
+
+# Performans metrikleri
+mape <- mean(abs((gercek_values - tahmin_values) / gercek_values), na.rm = TRUE) * 100
+rmse <- sqrt(mean((gercek_values - tahmin_values)^2, na.rm = TRUE))
+mae <- mean(abs(gercek_values - tahmin_values), na.rm = TRUE)
+r_squared <- cor(gercek_values, tahmin_values, use = "complete.obs")^2
+
+print("\n=== PROPHET MODEL PERFORMANSI ===")
+print(paste("MAPE (Ortalama Mutlak Yüzde Hata):", round(mape, 2), "%"))
+print(paste("RMSE (Kök Ortalama Kare Hata):", round(rmse, 2)))
+print(paste("MAE (Ortalama Mutlak Hata):", round(mae, 2)))
+print(paste("R² (Açıklanan Varyans):", round(r_squared, 4)))
+
+print("✓ Performans metrikleri hesaplandı!")
+
+```
+
+-   Gelecek Tahminlerini Analiz
+
+```{r}
+print("\nBLOK 12: Gelecek dönem tahminleri analiz ediliyor...")
+
+gelecek_tahminler <- prophet_forecast %>%
+  filter(ds > max(prophet_df$ds)) %>%
+  select(ds, yhat, yhat_lower, yhat_upper) %>%
+  mutate(
+    Yil = year(ds),
+    Ay = month(ds),
+    Ay_Adi = month.abb[Ay]
+  )
+
+print("\n=== GELECEK DÖNEM TAHMİNLERİ ===")
+print(paste("✓ Gelecek", nrow(gelecek_tahminler), "ay için tahmin yapıldı"))
+print("\nİlk 12 ayın tahmini:")
+print(head(gelecek_tahminler[c("ds", "yhat", "yhat_lower", "yhat_upper")], 12))
+```
+
+-   Tahmin İstatistikleri
+
+```{r}
+print("\nBLOK 13: Tahmin istatistikleri hesaplanıyor...")
+
+print("\n=== TAHMİN İSTATİSTİKLERİ ===")
+print(paste("Ortalama tahmin değeri:", round(mean(gelecek_tahminler$yhat), 2)))
+print(paste("Minimum tahmin:", round(min(gelecek_tahminler$yhat), 2)))
+print(paste("Maksimum tahmin:", round(max(gelecek_tahminler$yhat), 2)))
+print(paste("Standart sapma:", round(sd(gelecek_tahminler$yhat), 2)))
+
+print("✓ Genel istatistikler hesaplandı!")
+```
+
+-   Mevsimsel Analizler
+
+```{r}
+print("\nBLOK 14: Mevsimsel analiz yapılıyor...")
+
+mevsimsel_ortalama <- gelecek_tahminler %>%
+  group_by(Ay, Ay_Adi) %>%
+  summarise(
+    Ortalama_Tahmin = mean(yhat),
+    .groups = "drop"
+  ) %>%
+  arrange(Ay)
+
+print("\n=== MEVSIMSEL TAHMİN ANALİZİ ===")
+print("✓ Aylara göre ortalama tahmin değerleri:")
+print(mevsimsel_ortalama)
+```
+
+-   CROSS-VALIDATION (MODEL DOĞRULAMA)
+
+```{r}
+print("\nBLOK 15: Model doğrulama (Cross-Validation) yapılıyor...")
+
+toplam_gun <- as.numeric(difftime(max(prophet_df$ds), min(prophet_df$ds), units = "days"))
+
+# Otomatik ayarla
+initial_gun <- floor(toplam_gun * 0.7)
+horizon_gun <- 90
+
+if ((toplam_gun - initial_gun) >= horizon_gun) {
+  print("Cross-validation başlatılıyor...")
+  cv_results <- cross_validation(
+    prophet_model,
+    initial = initial_gun,
+    period = 30,
+    horizon = horizon_gun,
+    units = 'days'
+  )
+  cv_metrics <- performance_metrics(cv_results)
+  print(cv_metrics)
+} else {
+  print("⚠ Yeterli veri yok: horizon > (toplam veri - initial)")
+}
+
+
+```
+
+```{r}
+future <- make_future_dataframe(prophet_model, periods = 180)
+forecast <- predict(prophet_model, future)
+
+plot(prophet_model, forecast) +
+  ggtitle("Tahmin Grafiği: Prophet Modeli") +
+  xlab("Tarih") + ylab("Tahmin Edilen Değer")
+```
+
+```{r}
+prophet_plot_components(prophet_model, forecast)
+```
+
+-   Sonuçları Dosyalara Kaydetme
+
+```{r}
+print("\nBLOK 16: Sonuçlar dosyalara kaydediliyor...")
+
+# CSV dosyaları
+write.csv(prophet_forecast, "prophet_forecast_results.csv", row.names = FALSE)
+write.csv(gelecek_tahminler, "prophet_future_predictions.csv", row.names = FALSE)
+
+# Model ve özet kaydetme
+model_summary <- list(
+  model_type = "Prophet",
+  data_points = nrow(prophet_df),
+  forecast_horizon = gelecek_aylar,
+  mape = round(mape, 2),
+  rmse = round(rmse, 2),
+  mae = round(mae, 2),
+  r_squared = round(r_squared, 4)
+)
+
+saveRDS(prophet_model, "prophet_model.rds")
+saveRDS(model_summary, "prophet_model_summary.rds")
+
+print("✓ Tüm sonuçlar başarıyla kaydedildi!")
+```
+
+-   Dosya Çıktıları Özeti
+
+```{r}
+print("\nBLOK 17: Oluşturulan dosyalar listeleniyor...")
+
+print("\n=== OLUŞTURULAN DOSYALAR ===")
+print("📊 GRAFİK DOSYALARI:")
+print("  - prophet_forecast_aylik.png (Ana tahmin grafiği)")
+print("  - prophet_components_aylik.png (Bileşen grafikleri)")
+
+print("\n📋 VERİ DOSYALARI:")
+print("  - prophet_forecast_results.csv (Tüm tahmin sonuçları)")
+print("  - prophet_future_predictions.csv (Sadece gelecek tahminler)")
+
+print("\n🔧 MODEL DOSYALARI:")
+print("  - prophet_model.rds (Eğitilmiş model)")
+print("  - prophet_model_summary.rds (Model özeti)")
+
+if (nrow(prophet_df) >= 24) {
+  print("\n✅ DOĞRULAMA DOSYALARI:")
+  print("  - prophet_cv_results.csv (Cross-validation sonuçları)")
+  print("  - prophet_cv_metrics.csv (CV performans metrikleri)")
+}
+```
+
+-   Son

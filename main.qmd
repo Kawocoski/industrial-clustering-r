@@ -1,0 +1,895 @@
+---
+title: "main"
+format: html
+editor: visual
+---
+
+#### Veri Madenciliği
+
+-   Kütüphanelerin Yüklenmesi
+
+```{r}
+
+suppressPackageStartupMessages({
+  if (!require("readr", quietly = TRUE)) install.packages("readr")
+  if (!require("readxl", quietly = TRUE)) install.packages("readxl")
+  if (!require("writexl", quietly = TRUE)) install.packages("writexl")
+  if (!require("dplyr", quietly = TRUE)) install.packages("dplyr")
+  if (!require("ggplot2", quietly = TRUE)) install.packages("ggplot2")
+  if (!require("lubridate", quietly = TRUE)) install.packages("lubridate")
+  if (!require("scales", quietly = TRUE)) install.packages("scales")
+  if (!require("stringr", quietly = TRUE)) install.packages("stringr")
+  if (!require("dbscan", quietly = TRUE)) install.packages("dbscan")
+  if (!require("cluster", quietly = TRUE)) install.packages("cluster")
+  if (!require("factoextra", quietly = TRUE)) install.packages("factoextra")
+  if (!require("gridExtra", quietly = TRUE)) install.packages("gridExtra")
+  if (!require("RColorBrewer", quietly = TRUE)) install.packages("RColorBrewer")
+  if (!require("plotly", quietly = TRUE)) install.packages("plotly")
+  if (!require("pheatmap", quietly = TRUE)) install.packages("pheatmap")
+  if (!require("reshape2", quietly = TRUE)) install.packages("reshape2")
+  
+  
+  library(readr)
+  library(readxl)
+  library(writexl)
+  library(dplyr)
+  library(ggplot2)
+  library(lubridate)
+  library(scales)
+  library(stringr)
+  library(tidyr)
+  library(RColorBrewer)
+  library(pheatmap)
+  library(plotly)
+  library(reshape2)
+
+})
+
+# Yöntem 2: Tamamen sessiz yükleme (hiçbir mesaj yok)
+invisible({
+  capture.output({
+    suppressPackageStartupMessages({
+      suppressWarnings({
+        
+        # Gerekli paketler listesi
+        paketler <- c("readr", "readxl", "writexl", "dplyr", "ggplot2", 
+                     "lubridate", "forecast", "zoo", "scales", "purrr", 
+                     "stringr", "tidyr", "prophet", "tseries")
+        
+        # Paketleri kontrol et ve yükle
+        for(paket in paketler) {
+          if (!require(paket, character.only = TRUE, quietly = TRUE)) {
+            install.packages(paket, quiet = TRUE)
+            library(paket, character.only = TRUE, quietly = TRUE)
+          }
+        }
+      })
+    })
+  })
+})
+
+cat("Kütüphaneler hazır.\n")
+```
+
+-   CSV'lerin XLXS Türüne Çevrilmesi
+
+    ```{r}
+    # Sessiz çalışma modu için
+    options(readr.show_progress = FALSE)
+
+    ana_klasor_yolu <- "C:/Users/Enis/Desktop/AZIOSB"
+
+    # Alt klasörleri bul
+    alt_klasorler <- list.dirs(ana_klasor_yolu, full.names = TRUE, recursive = FALSE)
+    cat("Alt klasör sayısı:", length(alt_klasorler), "\n")
+
+    csv_to_xlsx_count <- 0
+    toplam_csv <- 0
+
+    # Önce toplam CSV sayısını hesapla
+    for (klasor in alt_klasorler) {
+      csv_sayisi <- length(list.files(path = klasor, pattern = "\\.csv$|\\.CSV$"))
+      toplam_csv <- toplam_csv + csv_sayisi
+    }
+
+    cat("Toplam CSV dosyası:", toplam_csv, "\n")
+    cat("Dönüştürme başlıyor...\n")
+
+    for (klasor in alt_klasorler) {
+      csv_dosyalari <- list.files(path = klasor, pattern = "\\.csv$|\\.CSV$", full.names = TRUE)
+      
+      for (csv_dosya in csv_dosyalari) {
+        tryCatch({
+          # Tüm mesajları bastır
+          invisible(capture.output({
+            veri <- read_delim(csv_dosya, delim = ";", locale = locale(encoding = "UTF-8"), 
+                              show_col_types = FALSE, progress = FALSE)
+          }))
+          
+          dosya_adi <- basename(csv_dosya)
+          dosya_adi_xlsx <- str_replace(dosya_adi, "\\.csv$|\\.CSV$", ".xlsx")
+          xlsx_dosya_yolu <- file.path(klasor, dosya_adi_xlsx)
+          
+          write_xlsx(veri, xlsx_dosya_yolu)
+          csv_to_xlsx_count <- csv_to_xlsx_count + 1
+          
+        }, error = function(e) {
+          cat("Hata:", basename(csv_dosya), "\n")
+        })
+      }
+    }
+
+    cat("Tamamlandı! Toplam", csv_to_xlsx_count, "dosya dönüştürüldü.\n")
+    ```
+
+-   Dönüştürülen Verinin RSTUDIO Kısmına Atılması
+
+    ```{r}
+    tum_xlsx_dosyalari <- list()
+    for (klasor in alt_klasorler) {
+      xlsx_dosyalari <- list.files(path = klasor, pattern = "\\.xlsx$|\\.XLSX$", full.names = TRUE)
+      tum_xlsx_dosyalari <- c(tum_xlsx_dosyalari, xlsx_dosyalari)
+    }
+
+    cat("İşlenecek toplam XLSX dosya sayısı:", length(tum_xlsx_dosyalari), "\n")
+    ```
+
+-   Dosyaların Okunup Birleştirilmesi
+
+```{r}
+# Tüm Excel dosyalarını oku ve birleştir
+veri_toplam <- data.frame()
+basarili_okunan <- 0
+
+for (dosya in tum_xlsx_dosyalari) {
+  # Dosyayı oku
+  temp_veri <- tryCatch({
+    read_excel(dosya)
+  }, error = function(e) {
+    cat("Hata:", dosya, "dosyası okunamadı.\n")
+    cat("Hata mesajı:", e$message, "\n")
+    return(NULL)
+  })
+  
+  if (!is.null(temp_veri)) {
+    # Sütun adlarını kontrol et ve düzelt (bazı dosyalarda sütun adları farklı olabilir)
+    if (!"Tarih-Saat" %in% names(temp_veri) && "Tarih" %in% names(temp_veri)) {
+      names(temp_veri)[which(names(temp_veri) == "Tarih")] <- "Tarih-Saat"
+    }
+    
+    # Dosya adı ve klasör bilgisini ekle
+    temp_veri$Dosya_Adi <- basename(dosya)
+    temp_veri$Klasor_Adi <- basename(dirname(dosya))
+    
+    # Ana veri setine ekle
+    veri_toplam <- bind_rows(veri_toplam, temp_veri)
+    basarili_okunan <- basarili_okunan + 1
+  }
+}
+cat("Başarıyla okunan ve birleştirilen dosya sayısı:", basarili_okunan, "\n")
+cat("Toplam veri satır sayısı:", nrow(veri_toplam), "\n\n")
+
+tail(veri_toplam)
+
+cat("Veri seti sütunları:", paste(names(veri_toplam), collapse = ", "), "\n\n")
+```
+
+-   Veri Temizleme ve Hazırlama
+
+```{r}
+
+veri_toplam$`Tarih-Saat` <- as.POSIXct(veri_toplam$`Tarih-Saat`, format="%d-%m-%Y %H:%M:%S")
+
+veri_toplam$`Tarih-Saat` <- ymd_hms(veri_toplam$`Tarih-Saat`)
+
+veri_toplam <- veri_toplam %>%
+
+  mutate(
+
+    Yil = year(`Tarih-Saat`),
+
+    Ay = month(`Tarih-Saat`),
+
+    Gun = day(`Tarih-Saat`),
+
+    Saat = hour(`Tarih-Saat`),
+
+    Dakika = minute(`Tarih-Saat`),
+
+    Haftanin_Gunu = wday(`Tarih-Saat`, label = TRUE),
+
+    Hafta_Sonu = ifelse(wday(`Tarih-Saat`) %in% c(1, 7), "Hafta Sonu", "Hafta İçi")
+
+  )
+veri_toplam <- veri_toplam %>%
+  mutate(
+    Giris1_Anlik = Giris1_Anlik / 1000,
+    Giris1_Toplam = Giris1_Toplam / 1000,
+    Giris1_Sabit_Toplam = Giris1_Sabit_Toplam / 1000
+  )
+
+# Veri setinin özetini göster
+
+summary(veri_toplam)
+
+# Aykırı değerleri tespit et (Giris1_Anlik için)
+
+Q1 <- quantile(veri_toplam$Giris1_Anlik, 0.25, na.rm = TRUE)
+
+Q3 <- quantile(veri_toplam$Giris1_Anlik, 0.75, na.rm = TRUE)
+
+IQR <- Q3 - Q1
+
+alt_sinir <- Q1 - 1.5 * IQR
+
+ust_sinir <- Q3 + 1.5 * IQR
+
+outliers <- veri_toplam %>% 
+
+  filter(Giris1_Anlik < alt_sinir | Giris1_Anlik > ust_sinir)
+
+veri_temiz <- veri_toplam %>%
+
+  filter(Giris1_Anlik >= alt_sinir & Giris1_Anlik <= ust_sinir)
+
+cat("Aykırı değer sayısı:", nrow(outliers), "\n")
+
+# Herhangi bir sütunda NA olan satırları sil
+veri_toplam <- veri_toplam %>%
+  na.omit()
+
+data <- veri_toplam
+```
+
+-   Zaman bazlı özellikler mevcut (Yıl, Ay, Gün, Saat, Dakika, Haftanin_Gunu, Hafta_Sonu
+
+-   Ek özellikler ekleme (Lag özellikler (önceki ölçümlerdeki debi değerleri)
+
+```{r}
+data$Giris1_Anlik_lag1 <- lag(data$Giris1_Anlik, 1)
+data$Giris1_Anlik_lag2 <- lag(data$Giris1_Anlik, 2)
+data$Giris1_Anlik_lag3 <- lag(data$Giris1_Anlik, 3)
+
+# Hareketli ortalama (5 ölçümlük)
+data$Giris1_Anlik_ma5 <- stats::filter(data$Giris1_Anlik, rep(1/5, 5), sides = 2)
+
+
+# Debi değişim oranı
+data$Giris1_Anlik_change <- c(NA, diff(data$Giris1_Anlik))
+
+
+# Hafta sonu numerik değişkeni
+data$Hafta_Sonu_num <- ifelse(data$Hafta_Sonu == "Hafta Sonu", 1, 0)
+
+
+# Gün kategorisi (sabah, öğle, akşam, gece)
+data$Gun_Kategorisi <- case_when(
+  data$Saat >= 6 & data$Saat < 12 ~ "Sabah",
+  data$Saat >= 12 & data$Saat < 18 ~ "Öğle", 
+  data$Saat >= 18 & data$Saat < 24 ~ "Akşam",
+  TRUE ~ "Gece"
+)
+
+# Eksik değerleri temizle
+data_clean <- na.omit(data)
+
+# Kümeleme için özellik matrisini hazırla
+features <- data_clean[, c("Giris1_Anlik", "Saat", "Ay", "Gun", 
+                          "Giris1_Anlik_lag1", "Giris1_Anlik_lag2", 
+                          "Giris1_Anlik_ma5", "Giris1_Anlik_change", 
+                          "Hafta_Sonu_num")]
+
+# Verileri standartlaştır (önemli!)
+features_scaled <- scale(features)
+
+```
+
+-   K-MEANS ANALİZİ
+
+Spherical kümeler oluşturur, küme sayısını önceden belirlememiz gerekir.
+
+```{r}
+# Örneklem boyutunu belirle (örneğin 3000 gözlem)
+sample_size <- 3000
+
+# Veri setinin boyutunu kontrol et
+n_total <- nrow(data_clean)
+cat("Toplam gözlem sayısı:", n_total, "\n")
+cat("Örneklem boyutu:", sample_size, "\n")
+
+# Eğer veri seti örneklem boyutundan küçükse, tüm veriyi kullan
+if(n_total <= sample_size) {
+  sample_size <- n_total
+  sample_indices <- 1:n_total
+} else {
+  # Rastgele örnekleme yap
+  set.seed(123)
+  sample_indices <- sample(1:n_total, sample_size, replace = FALSE)
+}
+
+# Örneklemi al
+data_sample <- data_clean[sample_indices, ]
+features_sample <- features_scaled[sample_indices, ]
+
+# Optimal küme sayısını belirleme - Elbow Method
+set.seed(123)
+wss_sample <- sapply(1:10, function(k) {
+  kmeans(features_sample, k, nstart = 10)$tot.withinss
+})
+
+# Silhouette analizi
+library(cluster)
+sil_scores_sample <- sapply(2:10, function(k) {
+  km <- kmeans(features_sample, k, nstart = 10)
+  ss <- silhouette(km$cluster, dist(features_sample))
+  mean(ss[, 3])
+})
+
+# Sonuçları görselleştir
+
+
+# Optimal küme sayısını belirle (örneğin 4)
+optimal_k <- 4
+
+# K-means ile kümeleme (örneklem üzerinde)
+set.seed(123)
+#kmeans_sample <- kmeans(features_sample, centers = optimal_k, nstart = 25)
+kmeans_sample <- kmeans(features_sample, centers = optimal_k, nstart = 25, iter.max = 100)
+
+# Örneklem sonuçlarını kaydet
+data_sample$kmeans_cluster <- as.factor(kmeans_sample$cluster)
+
+data_long <- melt(data_sample, id.vars = "kmeans_cluster")
+
+```
+
+-   Grafikleri Görüntüleme İşlemleri
+
+```{r}
+# Gap statistic analizi
+set.seed(123)
+gap_stat <- clusGap(features_sample, FUN = function(x, k) kmeans(x, centers = k, nstart = 50, iter.max = 100), 
+                    K.max = 10, B = 50)
+# Optimal küme sayısı belirleme grafikleri
+p1 <- fviz_nbclust(features_sample, kmeans, method = "wss", k.max = 10) +
+  labs(title = "Elbow Method", subtitle = "Optimal Kume Sayısı Belirleme") +
+  theme_minimal()
+
+p2 <- fviz_nbclust(features_sample, kmeans, method = "silhouette", k.max = 10) +
+  labs(title = "Silhouette Method", subtitle = "Optimal Kume Sayısı Belirleme") +
+  theme_minimal()
+
+p3 <- fviz_nbclust(features_sample, kmeans, method = "gap_stat", k.max = 10) +
+  labs(title = "Gap Statistic Method", subtitle = "Optimal Kume Sayısı \nBelirleme") +
+  theme_minimal()
+
+# Kombine optimal küme grafiği
+grid.arrange(p1, p2, p3, nrow = 1, ncol = 3)
+```
+
+```{r}
+# ===============================================
+# 2. KÜME GÖRSELLEŞTIRME
+# ===============================================
+
+n_clusters <- length(unique(data_sample$kmeans_cluster))
+palette <- RColorBrewer::brewer.pal(n_clusters, "Pastel1")
+
+# PCA ile boyut indirgeme
+pca_result <- prcomp(features_sample, center = TRUE, scale. = TRUE)
+pca_data <- data.frame(pca_result$x[,1:2], Cluster = factor(data_sample$kmeans_cluster))
+
+# Temel PCA plot'unu oluştur
+pca_plot <- ggplot(pca_data, aes(x = PC1, y = PC2, color = Cluster)) +
+  geom_point(alpha = 0.7, size = 2) +
+  scale_color_manual(values = palette) +
+  theme_minimal() +
+  labs(title = "K-means Kumeleme Sonucları (PCA)",
+       x = paste0("PC1 (", round(summary(pca_result)$importance[2,1]*100, 1), "% varyans)"),
+       y = paste0("PC2 (", round(summary(pca_result)$importance[2,2]*100, 1), "% varyans)")) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Küme merkezlerini PCA uzayına dönüştür
+centers_pca <- predict(pca_result, kmeans_sample$centers)
+centers_df <- data.frame(centers_pca[,1:2], Cluster = factor(1:n_clusters))
+
+# Merkezlerle birlikte plot
+pca_plot_with_centers <- pca_plot +
+  geom_point(data = centers_df, aes(x = PC1, y = PC2), 
+             color = "black", size = 5, shape = 4, stroke = 2) +
+  geom_point(data = centers_df, aes(x = PC1, y = PC2, color = Cluster), 
+             size = 3, shape = 16) +
+  labs(title = "K-means Kümeleme Sonuçları (PCA) - Merkezlerle")
+
+# Plot'ları göster
+print(pca_plot)
+print(pca_plot_with_centers)
+
+# PCA sonuçları hakkında bilgi
+cat("PCA Özet Bilgileri:\n")
+cat("PC1 Varyans Açıklaması: ", round(summary(pca_result)$importance[2,1]*100, 2), "%\n")
+cat("PC2 Varyans Açıklaması: ", round(summary(pca_result)$importance[2,2]*100, 2), "%\n")
+cat("İlk 2 PC Toplam Varyans: ", round(sum(summary(pca_result)$importance[2,1:2])*100, 2), "%\n")
+```
+
+```{r}
+
+# ===============================================
+# 3. KÜME KARAKTERİSTİKLERİ ANALİZİ
+# ===============================================
+
+# Küme merkezlerini orijinal ölçekte görselleştir
+centers_original <- data.frame(
+  Cluster = 1:optimal_k,
+  kmeans_sample$centers
+)
+
+# Heatmap için veri hazırlama
+centers_melted <- melt(centers_original, id.vars = "Cluster")
+
+heatmap_plot <- ggplot(centers_melted, aes(x = variable, y = factor(Cluster), fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", 
+                       midpoint = 0, name = "Standart\nDeger") +
+  labs(title = "Kume Merkezleri Heatmap",
+       subtitle = "Standartlaştırılmış Degerler",
+       x = "Ozellikler", y = "Kume") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5, face = "bold"))
+
+print(heatmap_plot)
+```
+
+```{r}
+# ===============================================
+# 5. SAATLIK VE GÜNLÜK DESEN ANALİZİ
+# ===============================================
+# Küme boyutları pasta grafiği
+# Küme sayısını hesapla ve renk paletini oluştur
+n_clusters <- length(unique(data_sample$kmeans_cluster))
+palette <- RColorBrewer::brewer.pal(n_clusters, "Set1")
+
+# ÖNEMLI: cluster_colors nesnesini oluştur
+cluster_colors <- palette
+names(cluster_colors) <- sort(unique(data_sample$kmeans_cluster))
+
+# Kontrol için yazdır
+print(paste("Kume sayısı:", n_clusters))
+print("Kume renkleri:")
+print(cluster_colors)
+print("Benzersiz kume degerleri:")
+print(sort(unique(data_sample$kmeans_cluster)))
+
+# Saatlik desen analizi
+hourly_pattern <- data_sample %>%
+  group_by(Saat, kmeans_cluster) %>%
+  summarise(
+    Ortalama = mean(Giris1_Anlik, na.rm = TRUE),
+    Medyan = median(Giris1_Anlik, na.rm = TRUE),
+    Std_Sapma = sd(Giris1_Anlik, na.rm = TRUE),
+    Gozlem_Sayisi = n(),
+    .groups = 'drop'
+  ) %>%
+  mutate(kmeans_cluster = factor(kmeans_cluster))  # Factor'e dönüştür
+
+# Saatlik pattern görselleştirme
+hourly_plot <- ggplot(hourly_pattern, aes(x = Saat, y = Ortalama, color = kmeans_cluster)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  scale_color_manual(values = cluster_colors, name = "Kume") +
+  scale_x_continuous(breaks = seq(0, 23, 2)) +
+  labs(title = "Saatlik Ortalama Desen (Kumelere Göre)",
+       x = "Saat", y = "Ortalama Giris1 Anlık") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        legend.position = "bottom")
+
+print(hourly_plot)
+
+# Gün kategorisi analizi için veriyi hazırla
+data_sample_for_plot <- data_sample %>%
+  mutate(kmeans_cluster = factor(kmeans_cluster))
+
+# Gün kategorisi görselleştirme
+gun_kategori_plot <- ggplot(data_sample_for_plot, aes(x = Gun_Kategorisi, y = Giris1_Anlik, fill = kmeans_cluster)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = cluster_colors, name = "Kume") +
+  labs(title = "Gün Kategorilerine Gore Dağılım",
+       x = "Gün Kategorisi", y = "Giris1 Anlık") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom")
+
+print(gun_kategori_plot)
+
+# Ek analizler
+# Saatlik pattern özet tablosu
+cat("\nSaatlik pattern özet:\n")
+hourly_summary <- hourly_pattern %>%
+  group_by(kmeans_cluster) %>%
+  summarise(
+    Peak_Saat = Saat[which.max(Ortalama)],
+    Max_Ortalama = max(Ortalama),
+    Min_Ortalama = min(Ortalama),
+    Ortalama_Std = mean(Std_Sapma, na.rm = TRUE),
+    .groups = 'drop'
+  )
+print(hourly_summary)
+
+# Gün kategorisi özet tablosu
+cat("\nGün kategorisi özet:\n")
+gun_kategori_summary <- data_sample %>%
+  group_by(Gun_Kategorisi, kmeans_cluster) %>%
+  summarise(
+    Ortalama = mean(Giris1_Anlik, na.rm = TRUE),
+    Medyan = median(Giris1_Anlik, na.rm = TRUE),
+    Gozlem_Sayisi = n(),
+    .groups = 'drop'
+  ) %>%
+  arrange(Gun_Kategorisi, kmeans_cluster)
+print(gun_kategori_summary)
+```
+
+```{r}
+# Küme sayısını hesapla ve renk paletini oluştur
+n_clusters <- length(unique(data_sample$kmeans_cluster))
+palette <- RColorBrewer::brewer.pal(n_clusters, "Set1")
+
+# cluster_colors nesnesini oluştur (palette ile aynı)
+cluster_colors <- palette
+names(cluster_colors) <- sort(unique(data_sample$kmeans_cluster))
+
+# Alternatif olarak, eğer küme numaraları 1'den başlıyorsa:
+# cluster_colors <- setNames(palette, 1:n_clusters)
+
+print(paste("Kume sayısı:", n_clusters))
+print("Renk paleti:")
+print(cluster_colors)
+
+# Saatlik desen analizi
+hourly_pattern <- data_sample %>%
+  group_by(Saat, kmeans_cluster) %>%
+  summarise(
+    Ortalama = mean(Giris1_Anlik, na.rm = TRUE),
+    Medyan = median(Giris1_Anlik, na.rm = TRUE),
+    Std_Sapma = sd(Giris1_Anlik, na.rm = TRUE),
+    Gozlem_Sayisi = n(),
+    .groups = 'drop'
+  ) %>%
+  mutate(kmeans_cluster = factor(kmeans_cluster))  # Factor'e dönüştür
+
+# Saatlik pattern görselleştirme
+hourly_plot <- ggplot(hourly_pattern, aes(x = Saat, y = Ortalama, color = kmeans_cluster)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  scale_color_manual(values = cluster_colors, name = "Kume") +
+  scale_x_continuous(breaks = seq(0, 23, 2)) +
+  labs(title = "Saatlik Ortalama Desen (Kumelere Gore)",
+       x = "Saat", y = "Ortalama Giris1 Anlık") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        legend.position = "bottom")
+
+print(hourly_plot)
+
+# Gün kategorisi analizi için veriyi hazırla
+data_sample_plot <- data_sample %>%
+  mutate(kmeans_cluster = factor(kmeans_cluster))
+
+# Gün kategorisi görselleştirme
+gun_kategori_plot <- ggplot(data_sample_plot, aes(x = Gun_Kategorisi, y = Giris1_Anlik, fill = kmeans_cluster)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = cluster_colors, name = "Kume") +
+  labs(title = "Gün Kategorilerine Göre Dağılım",
+       x = "Gun Kategorisi", y = "Giris1 Anlık") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom")
+
+print(gun_kategori_plot)
+
+# Özet istatistikler
+cat("\nKume bazlı ozet istatistikler:\n")
+cluster_summary <- data_sample %>%
+  group_by(kmeans_cluster) %>%
+  summarise(
+    Ortalama = mean(Giris1_Anlik, na.rm = TRUE),
+    Medyan = median(Giris1_Anlik, na.rm = TRUE),
+    Std_Sapma = sd(Giris1_Anlik, na.rm = TRUE),
+    Min = min(Giris1_Anlik, na.rm = TRUE),
+    Max = max(Giris1_Anlik, na.rm = TRUE),
+    Gozlem_Sayisi = n(),
+    .groups = 'drop'
+  )
+
+print(cluster_summary)
+```
+
+```{r}
+
+# ===============================================
+# 6. LAG DEĞİŞKENLERİ ANALİZİ
+# ===============================================
+
+
+# Küme sayısını hesapla ve renk paletini oluştur
+n_clusters <- length(unique(data_sample$kmeans_cluster))
+palette <- RColorBrewer::brewer.pal(n_clusters, "Set3")
+
+# cluster_colors nesnesini oluştur
+cluster_colors <- palette
+names(cluster_colors) <- sort(unique(data_sample$kmeans_cluster))
+
+print(paste("Kume sayısı:", n_clusters))
+print("Kume renkleri:")
+print(cluster_colors)
+
+# Lag değişkenleri analizi
+lag_analysis <- data_sample %>%
+  select(kmeans_cluster, Giris1_Anlik, Giris1_Anlik_lag1, 
+         Giris1_Anlik_lag2, Giris1_Anlik_lag3, Giris1_Anlik_ma5) %>%
+  mutate(kmeans_cluster = factor(kmeans_cluster)) %>%  # Factor'e dönüştür
+  melt(id.vars = "kmeans_cluster")
+
+# Değişken isimlerini daha okunabilir hale getir
+lag_analysis$variable <- factor(lag_analysis$variable, 
+                               levels = c("Giris1_Anlik", "Giris1_Anlik_lag1", 
+                                         "Giris1_Anlik_lag2", "Giris1_Anlik_lag3", 
+                                         "Giris1_Anlik_ma5"),
+                               labels = c("Anlık", "Lag-1", "Lag-2", "Lag-3", "MA-5"))
+
+# Lag analizi görselleştirme
+lag_plot <- ggplot(lag_analysis, aes(x = variable, y = value, fill = kmeans_cluster)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
+  scale_fill_manual(values = cluster_colors, name = "Kume") +
+  labs(title = "Lag Değişkenleri ve Hareketli Ortalama Analizi",
+       x = "Degisken", y = "Deger") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom")
+
+print(lag_plot)
+
+# Lag değişkenleri arasındaki korelasyon analizi
+correlation_by_cluster <- data_sample %>%
+  group_by(kmeans_cluster) %>%
+  summarise(
+    Lag1_Cor = cor(Giris1_Anlik, Giris1_Anlik_lag1, use = "complete.obs"),
+    Lag2_Cor = cor(Giris1_Anlik, Giris1_Anlik_lag2, use = "complete.obs"),
+    Lag3_Cor = cor(Giris1_Anlik, Giris1_Anlik_lag3, use = "complete.obs"),
+    MA5_Cor = cor(Giris1_Anlik, Giris1_Anlik_ma5, use = "complete.obs"),
+    .groups = 'drop'
+  )
+
+print("Kumelere gore korelasyon analizi:")
+print(correlation_by_cluster)
+
+# Alternatif görselleştirme: Facet wrap ile
+lag_plot_facet <- ggplot(lag_analysis, aes(x = kmeans_cluster, y = value, fill = kmeans_cluster)) +
+  geom_boxplot(alpha = 0.7) +
+  facet_wrap(~variable, scales = "free_y", ncol = 3) +
+  scale_fill_manual(values = cluster_colors, name = "Kume") +
+  labs(title = "Kumelere Gore Lag Degiskenleri Dagılımı",
+       x = "Kume", y = "Deger") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        legend.position = "bottom")
+
+print(lag_plot_facet)
+```
+
+```{r}
+# ===============================================
+# 9. KÜME İSTATİSTİKLERİ TABLOSU
+# ===============================================
+
+# Detaylı küme istatistikleri
+cluster_detailed_stats <- data_sample %>%
+  group_by(kmeans_cluster) %>%
+  summarise(
+    Gozlem_Sayisi = n(),
+    Oran = round(n() / nrow(data_sample) * 100, 1),
+    
+    # Giriş1_Anlik istatistikleri
+    Ort_Giris1 = round(mean(Giris1_Anlik, na.rm = TRUE), 2),
+    Med_Giris1 = round(median(Giris1_Anlik, na.rm = TRUE), 2),
+    Std_Giris1 = round(sd(Giris1_Anlik, na.rm = TRUE), 2),
+    Min_Giris1 = round(min(Giris1_Anlik, na.rm = TRUE), 2),
+    Max_Giris1 = round(max(Giris1_Anlik, na.rm = TRUE), 2),
+    
+    # Zaman istatistikleri
+    Ort_Saat = round(mean(Saat, na.rm = TRUE), 1),
+    
+    # Hafta sonu oranı
+    Hafta_Sonu_Oran = round(mean(Hafta_Sonu_num, na.rm = TRUE) * 100, 1),
+    
+    # Değişim istatistikleri
+    Ort_Degisim = round(mean(Giris1_Anlik_change, na.rm = TRUE), 2),
+    
+    .groups = 'drop'
+  )
+
+cat("\n=== DETAYLI KÜME İSTATİSTİKLERİ ===\n")
+print(cluster_detailed_stats)
+
+```
+
+```{r}
+
+# ===============================================
+# 10. SİLHOUETTE ANALİZİ DETAYLI
+# ===============================================
+# Küme boyutları pasta grafiği
+# Küme sayısını hesapla ve renk paletini oluştur
+n_clusters <- length(unique(data_sample$kmeans_cluster))
+palette <- RColorBrewer::brewer.pal(n_clusters, "Pastel1")
+
+# ÖNEMLI: cluster_colors nesnesini oluştur
+cluster_colors <- palette
+names(cluster_colors) <- sort(unique(data_sample$kmeans_cluster))
+
+# optimal_k tanımla (eğer tanımlanmamışsa)
+if (!exists("optimal_k")) {
+  optimal_k <- n_clusters
+}
+
+print(paste("Kume sayisi:", n_clusters))
+print(paste("Optimal k:", optimal_k))
+print("Kume renkleri:")
+print(cluster_colors)
+
+# Silhouette analizi detaylı
+sil_analysis <- silhouette(as.numeric(data_sample$kmeans_cluster), 
+                          dist(features_sample))
+
+# Temel silhouette bilgileri
+cat("\n=== SİLHOUETTE ANALİZİ BAŞLADI ===\n")
+cat("Silhouette matrisi boyutu:", dim(sil_analysis), "\n")
+cat("Genel Ortalama Silhouette Skoru:", round(mean(sil_analysis[, 3]), 3), "\n")
+
+# Silhouette plot (factoextra ile)
+sil_plot1 <- fviz_silhouette(sil_analysis, palette = cluster_colors) +
+  labs(title = "Silhouette Analizi - Kume Kalitesi") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+print(sil_plot1)
+
+# Manuel silhouette plot (alternatif)
+sil_data <- data.frame(
+  Index = 1:nrow(sil_analysis),
+  Cluster = factor(sil_analysis[, 1]),
+  Silhouette_Width = sil_analysis[, 3]
+) %>%
+  arrange(Cluster, desc(Silhouette_Width))
+
+sil_plot2 <- ggplot(sil_data, aes(x = Index, y = Silhouette_Width, fill = Cluster)) +
+  geom_col(width = 1) +
+  scale_fill_manual(values = cluster_colors, name = "Kume") +
+  geom_hline(yintercept = mean(sil_analysis[, 3]), 
+             linetype = "dashed", color = "red", size = 1) +
+  labs(title = "Silhouette Analizi - Manuel Gorsellestirme",
+       x = "Gozlem Indeksi", y = "Silhouette Genisligi") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+print(sil_plot2)
+
+# Küme bazında silhouette skorları
+sil_summary <- data.frame(
+  Cluster = 1:optimal_k,
+  Avg_Silhouette = aggregate(sil_analysis[, 3], 
+                            by = list(sil_analysis[, 1]), 
+                            FUN = mean)$x,
+  Size = as.numeric(table(sil_analysis[, 1])),
+  Min_Silhouette = aggregate(sil_analysis[, 3], 
+                            by = list(sil_analysis[, 1]), 
+                            FUN = min)$x,
+  Max_Silhouette = aggregate(sil_analysis[, 3], 
+                            by = list(sil_analysis[, 1]), 
+                            FUN = max)$x
+)
+
+cat("\n=== SİLHOUETTE SKOR ÖZETI ===\n")
+print(round(sil_summary, 3))
+
+# Küme kalitesi değerlendirmesi
+cat("\n=== KUME KALİTESİ DEGERLENDİRMESİ ===\n")
+overall_score <- mean(sil_analysis[, 3])
+cat("Genel Ortalama Silhouette Skoru:", round(overall_score, 3), "\n")
+
+if (overall_score > 0.7) {
+  cat("Kumeleme Kalitesi: MÜKEMMEİL (0.71-1.00)\n")
+} else if (overall_score > 0.5) {
+  cat("Kumeleme Kalitesi: MAKUL (0.51-0.70)\n")
+} else if (overall_score > 0.25) {
+  cat("Kumeleme Kalitesi: ZAYIF (0.26-0.50)\n")
+} else {
+  cat("Kumeleme Kalitesi: YAPAY KÜME (≤0.25)\n")
+}
+
+# Negatif silhouette skorları kontrolü
+negative_scores <- sum(sil_analysis[, 3] < 0)
+cat("Negatif Silhouette Skoru Olan Gozlem Sayısı:", negative_scores, "\n")
+cat("Toplam Gozlem Sayisi:", nrow(sil_analysis), "\n")
+cat("Negatif Oran:", round(negative_scores/nrow(sil_analysis)*100, 2), "%\n")
+
+# Küme bazında detaylı analiz
+cat("\n=== KUME BAZINDA DETAYLI ANALİZ ===\n")
+for (i in 1:optimal_k) {
+  cluster_sil <- sil_analysis[sil_analysis[, 1] == i, 3]
+  cat("Kume", i, ":\n")
+  cat("  - Ortalama Silhouette:", round(mean(cluster_sil), 3), "\n")
+  cat("  - Gozlem Sayısı:", length(cluster_sil), "\n")
+  cat("  - Negatif Skor Sayısı:", sum(cluster_sil < 0), "\n")
+  cat("  - Min-Max:", round(min(cluster_sil), 3), "-", round(max(cluster_sil), 3), "\n\n")
+}
+
+```
+
+```{r}
+# ===============================================
+# 11. KÜME DAĞILIM GRAFİKLERİ
+# ===============================================
+
+# Küme boyutları pasta grafiği
+n_clusters <- length(unique(data_sample$kmeans_cluster))
+palette <- RColorBrewer::brewer.pal(n_clusters, "Set2")  # veya "Set3", "Pastel1", vs.
+cluster_names <- levels(data_sample$kmeans_cluster)
+
+cluster_colors <- setNames(palette, cluster_names)
+
+cluster_sizes <- table(data_sample$kmeans_cluster)
+pie_data <- data.frame(
+  Cluster = names(cluster_sizes),
+  Count = as.numeric(cluster_sizes),
+  Percentage = round(as.numeric(cluster_sizes) / sum(cluster_sizes) * 100, 1)
+)
+
+pie_plot <- ggplot(pie_data, aes(x = "", y = Count, fill = Cluster)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  scale_fill_manual(values = cluster_colors) +
+  labs(title = "Küme Dağılımı", 
+       subtitle = paste("Toplam:", sum(cluster_sizes), "gozlem")) +
+  theme_void() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  geom_text(aes(label = paste0(Percentage, "%")), 
+            position = position_stack(vjust = 0.5))
+
+print(pie_plot)
+
+```
+
+```{r}
+# ===============================================
+# 12. SONUÇ RAPORU
+# ===============================================
+cat("\n", strrep("=", 60), "\n", sep = "")
+cat("           K-MEANS ANALİZİ SONUÇ RAPORU\n")
+cat(strrep("=", 60), "\n", sep = "")
+cat("Toplam Gözlem Sayısı:", nrow(data_sample), "\n")
+cat("Örneklem Boyutu:", nrow(data_sample), "\n")
+cat("Optimal Küme Sayısı:", optimal_k, "\n")
+cat("Kullanılan Özellik Sayısı:", ncol(features), "\n")
+cat("Genel Silhouette Skoru:", round(mean(sil_analysis[, 3]), 3), "\n")
+# cat("Küme Stabilite Skoru:", round(avg_stability, 3), "\n")  # tanımlıysa aç
+cat(strrep("=", 60), "\n", sep = "")
+
+# Model performans metrikleri
+within_ss <- kmeans_sample$tot.withinss
+between_ss <- kmeans_sample$betweenss
+total_ss <- kmeans_sample$totss
+
+cat("Within-cluster Sum of Squares:", round(within_ss, 2), "\n")
+cat("Between-cluster Sum of Squares:", round(between_ss, 2), "\n")
+cat("Total Sum of Squares:", round(total_ss, 2), "\n")
+cat("Açıklanan Varyans Oranı:", round(between_ss / total_ss * 100, 1), "%\n")
+cat(strrep("=", 60), "\n", sep = "")
+```

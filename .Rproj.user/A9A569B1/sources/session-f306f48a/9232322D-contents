@@ -1,0 +1,476 @@
+---
+title: "main"
+format: html
+editor: visual
+---
+
+#### Veri Madenciliği
+
+-   Kütüphanelerin Yüklenmesi
+
+```{r}
+
+suppressPackageStartupMessages({
+  if (!require("readr", quietly = TRUE)) install.packages("readr")
+  if (!require("readxl", quietly = TRUE)) install.packages("readxl")
+  if (!require("writexl", quietly = TRUE)) install.packages("writexl")
+  if (!require("dplyr", quietly = TRUE)) install.packages("dplyr")
+  if (!require("ggplot2", quietly = TRUE)) install.packages("ggplot2")
+  if (!require("lubridate", quietly = TRUE)) install.packages("lubridate")
+  if (!require("forecast", quietly = TRUE)) install.packages("forecast")
+  if (!require("zoo", quietly = TRUE)) install.packages("zoo")
+  if (!require("scales", quietly = TRUE)) install.packages("scales")
+  if (!require("purrr", quietly = TRUE)) install.packages("purrr")
+  if (!require("stringr", quietly = TRUE)) install.packages("stringr")
+  if (!require("prophet", quietly = TRUE)) install.packages("prophet")
+  if (!require("tseries", quietly = TRUE)) install.packages("tseries")
+  if (!require("dbscan", quietly = TRUE)) install.packages("dbscan")
+  if (!require("cluster", quietly = TRUE)) install.packages("cluster")
+  if (!require("factoextra", quietly = TRUE)) install.packages("factoextra")
+  if (!require("gridExtra", quietly = TRUE)) install.packages("gridExtra")
+  
+  library(readr)
+  library(readxl)
+  library(writexl)
+  library(dplyr)
+  library(ggplot2)
+  library(lubridate)
+  library(forecast)
+  library(zoo)
+  library(scales)
+  library(purrr)
+  library(stringr)
+  library(tidyr)
+  library(prophet)
+  library(tseries)
+})
+
+# Yöntem 2: Tamamen sessiz yükleme (hiçbir mesaj yok)
+invisible({
+  capture.output({
+    suppressPackageStartupMessages({
+      suppressWarnings({
+        
+        # Gerekli paketler listesi
+        paketler <- c("readr", "readxl", "writexl", "dplyr", "ggplot2", 
+                     "lubridate", "forecast", "zoo", "scales", "purrr", 
+                     "stringr", "tidyr", "prophet", "tseries")
+        
+        # Paketleri kontrol et ve yükle
+        for(paket in paketler) {
+          if (!require(paket, character.only = TRUE, quietly = TRUE)) {
+            install.packages(paket, quiet = TRUE)
+            library(paket, character.only = TRUE, quietly = TRUE)
+          }
+        }
+      })
+    })
+  })
+})
+
+cat("Kütüphaneler hazır.\n")
+```
+
+-   CSV'lerin XLXS Türüne Çevrilmesi
+
+    ```{r}
+    # Sessiz çalışma modu için
+    options(readr.show_progress = FALSE)
+
+    ana_klasor_yolu <- "C:/Users/Enis/Desktop/AZIOSB"
+
+    # Alt klasörleri bul
+    alt_klasorler <- list.dirs(ana_klasor_yolu, full.names = TRUE, recursive = FALSE)
+    cat("Alt klasör sayısı:", length(alt_klasorler), "\n")
+
+    csv_to_xlsx_count <- 0
+    toplam_csv <- 0
+
+    # Önce toplam CSV sayısını hesapla
+    for (klasor in alt_klasorler) {
+      csv_sayisi <- length(list.files(path = klasor, pattern = "\\.csv$|\\.CSV$"))
+      toplam_csv <- toplam_csv + csv_sayisi
+    }
+
+    cat("Toplam CSV dosyası:", toplam_csv, "\n")
+    cat("Dönüştürme başlıyor...\n")
+
+    for (klasor in alt_klasorler) {
+      csv_dosyalari <- list.files(path = klasor, pattern = "\\.csv$|\\.CSV$", full.names = TRUE)
+      
+      for (csv_dosya in csv_dosyalari) {
+        tryCatch({
+          # Tüm mesajları bastır
+          invisible(capture.output({
+            veri <- read_delim(csv_dosya, delim = ";", locale = locale(encoding = "UTF-8"), 
+                              show_col_types = FALSE, progress = FALSE)
+          }))
+          
+          dosya_adi <- basename(csv_dosya)
+          dosya_adi_xlsx <- str_replace(dosya_adi, "\\.csv$|\\.CSV$", ".xlsx")
+          xlsx_dosya_yolu <- file.path(klasor, dosya_adi_xlsx)
+          
+          write_xlsx(veri, xlsx_dosya_yolu)
+          csv_to_xlsx_count <- csv_to_xlsx_count + 1
+          
+        }, error = function(e) {
+          cat("Hata:", basename(csv_dosya), "\n")
+        })
+      }
+    }
+
+    cat("Tamamlandı! Toplam", csv_to_xlsx_count, "dosya dönüştürüldü.\n")
+    ```
+
+-   Dönüştürülen Verinin RSTUDIO Kısmına Atılması
+
+    ```{r}
+    tum_xlsx_dosyalari <- list()
+    for (klasor in alt_klasorler) {
+      xlsx_dosyalari <- list.files(path = klasor, pattern = "\\.xlsx$|\\.XLSX$", full.names = TRUE)
+      tum_xlsx_dosyalari <- c(tum_xlsx_dosyalari, xlsx_dosyalari)
+    }
+
+    cat("İşlenecek toplam XLSX dosya sayısı:", length(tum_xlsx_dosyalari), "\n")
+    ```
+
+-   Dosyaların Okunup Birleştirilmesi
+
+```{r}
+# Tüm Excel dosyalarını oku ve birleştir
+veri_toplam <- data.frame()
+basarili_okunan <- 0
+
+for (dosya in tum_xlsx_dosyalari) {
+  # Dosyayı oku
+  temp_veri <- tryCatch({
+    read_excel(dosya)
+  }, error = function(e) {
+    cat("Hata:", dosya, "dosyası okunamadı.\n")
+    cat("Hata mesajı:", e$message, "\n")
+    return(NULL)
+  })
+  
+  if (!is.null(temp_veri)) {
+    # Sütun adlarını kontrol et ve düzelt (bazı dosyalarda sütun adları farklı olabilir)
+    if (!"Tarih-Saat" %in% names(temp_veri) && "Tarih" %in% names(temp_veri)) {
+      names(temp_veri)[which(names(temp_veri) == "Tarih")] <- "Tarih-Saat"
+    }
+    
+    # Dosya adı ve klasör bilgisini ekle
+    temp_veri$Dosya_Adi <- basename(dosya)
+    temp_veri$Klasor_Adi <- basename(dirname(dosya))
+    
+    # Ana veri setine ekle
+    veri_toplam <- bind_rows(veri_toplam, temp_veri)
+    basarili_okunan <- basarili_okunan + 1
+  }
+}
+cat("Başarıyla okunan ve birleştirilen dosya sayısı:", basarili_okunan, "\n")
+cat("Toplam veri satır sayısı:", nrow(veri_toplam), "\n\n")
+
+tail(veri_toplam)
+
+cat("Veri seti sütunları:", paste(names(veri_toplam), collapse = ", "), "\n\n")
+```
+
+-   Veri Temizleme ve Hazırlama
+
+```{r}
+
+veri_toplam$`Tarih-Saat` <- as.POSIXct(veri_toplam$`Tarih-Saat`, format="%d-%m-%Y %H:%M:%S")
+
+veri_toplam$`Tarih-Saat` <- ymd_hms(veri_toplam$`Tarih-Saat`)
+
+veri_toplam <- veri_toplam %>%
+
+  mutate(
+
+    Yil = year(`Tarih-Saat`),
+
+    Ay = month(`Tarih-Saat`),
+
+    Gun = day(`Tarih-Saat`),
+
+    Saat = hour(`Tarih-Saat`),
+
+    Dakika = minute(`Tarih-Saat`),
+
+    Haftanin_Gunu = wday(`Tarih-Saat`, label = TRUE),
+
+    Hafta_Sonu = ifelse(wday(`Tarih-Saat`) %in% c(1, 7), "Hafta Sonu", "Hafta İçi")
+
+  )
+veri_toplam <- veri_toplam %>%
+  mutate(
+    Giris1_Anlik = Giris1_Anlik / 1000,
+    Giris1_Toplam = Giris1_Toplam / 1000,
+    Giris1_Sabit_Toplam = Giris1_Sabit_Toplam / 1000
+  )
+
+# Veri setinin özetini göster
+
+summary(veri_toplam)
+
+# Aykırı değerleri tespit et (Giris1_Anlik için)
+
+Q1 <- quantile(veri_toplam$Giris1_Anlik, 0.25, na.rm = TRUE)
+
+Q3 <- quantile(veri_toplam$Giris1_Anlik, 0.75, na.rm = TRUE)
+
+IQR <- Q3 - Q1
+
+alt_sinir <- Q1 - 1.5 * IQR
+
+ust_sinir <- Q3 + 1.5 * IQR
+
+outliers <- veri_toplam %>% 
+
+  filter(Giris1_Anlik < alt_sinir | Giris1_Anlik > ust_sinir)
+
+veri_temiz <- veri_toplam %>%
+
+  filter(Giris1_Anlik >= alt_sinir & Giris1_Anlik <= ust_sinir)
+
+cat("Aykırı değer sayısı:", nrow(outliers), "\n")
+
+# Herhangi bir sütunda NA olan satırları sil
+veri_toplam <- veri_toplam %>%
+  na.omit()
+
+data <- veri_toplam
+```
+
+-   Zaman bazlı özellikler mevcut (Yıl, Ay, Gün, Saat, Dakika, Haftanin_Gunu, Hafta_Sonu
+
+-   Ek özellikler ekleme (Lag özellikler (önceki ölçümlerdeki debi değerleri)
+
+```{r}
+data$Giris1_Anlik_lag1 <- lag(data$Giris1_Anlik, 1)
+data$Giris1_Anlik_lag2 <- lag(data$Giris1_Anlik, 2)
+data$Giris1_Anlik_lag3 <- lag(data$Giris1_Anlik, 3)
+
+# Hareketli ortalama (5 ölçümlük)
+data$Giris1_Anlik_ma5 <- stats::filter(data$Giris1_Anlik, rep(1/5, 5), sides = 2)
+
+
+# Debi değişim oranı
+data$Giris1_Anlik_change <- c(NA, diff(data$Giris1_Anlik))
+
+
+# Hafta sonu numerik değişkeni
+data$Hafta_Sonu_num <- ifelse(data$Hafta_Sonu == "Hafta Sonu", 1, 0)
+
+
+# Gün kategorisi (sabah, öğle, akşam, gece)
+data$Gun_Kategorisi <- case_when(
+  data$Saat >= 6 & data$Saat < 12 ~ "Sabah",
+  data$Saat >= 12 & data$Saat < 18 ~ "Öğle", 
+  data$Saat >= 18 & data$Saat < 24 ~ "Akşam",
+  TRUE ~ "Gece"
+)
+
+# Eksik değerleri temizle
+data_clean <- na.omit(data)
+
+# Kümeleme için özellik matrisini hazırla
+features <- data_clean[, c("Giris1_Anlik", "Saat", "Ay", "Gun", 
+                          "Giris1_Anlik_lag1", "Giris1_Anlik_lag2", 
+                          "Giris1_Anlik_ma5", "Giris1_Anlik_change", 
+                          "Hafta_Sonu_num")]
+
+# Verileri standartlaştır (önemli!)
+features_scaled <- scale(features)
+
+```
+
+-   K-MEANS ANALİZİ
+
+    ```{r}
+    sample_size <- 50000 # Sisteminizin RAM'ine göre bu değeri ayarlayın (örneğin 10000 ila 100000)
+    sample_indices <- sample(nrow(features_scaled), sample_size)
+    features_scaled_sample <- features_scaled[sample_indices, ]
+
+    sil_scores_sample <- sapply(2:10, function(k) {
+      km <- kmeans(features_scaled_sample, k, nstart = 25)
+      # dist(features_scaled_sample) burada artık çok daha küçük bir matris olacak
+      ss <- silhouette(km$cluster, dist(features_scaled_sample))
+      mean(ss[, 3])
+    })
+
+    # Sonuçları görselleştirerek en iyi k'yı seçin
+    plot(2:10, sil_scores_sample, type = "b", pch = 19, frame = FALSE,
+         xlab = "Number of clusters K",
+         ylab = "Average Silhouette Score",
+         main = "Silhouette Analysis on Sample Data")
+    ```
+
+Spherical kümeler oluşturur, küme sayısını önceden belirlememiz gerekir.
+
+```{r}
+
+# VERİYE GÖRE RASTGELE NOKTA SEÇEREK TEKRAR DENE
+
+
+# Optimal küme sayısını belirleme - Elbow Method
+set.seed(123)
+wss <- sapply(1:10, function(k) {
+  kmeans(features_scaled, k)$tot.withinss
+})
+
+# Silhouette analizi
+sil_scores <- sapply(2:10, function(k) {
+  km <- kmeans(features_scaled, k, nstart = 25)
+  ss <- silhouette(km$cluster, dist(features_scaled))
+  mean(ss[, 3])
+})
+
+# K-means ile kümeleme (optimal küme sayısı = 4)
+set.seed(123)
+kmeans_result <- kmeans(features_scaled, centers = 4, nstart = 25)
+
+# Sonuçları ana veriye ekle
+data_clean$kmeans_cluster <- as.factor(kmeans_result$cluster)
+```
+
+-   Görselleştirmeler
+
+##### Elbow Method Grafiği
+
+```{r}
+p1 <- ggplot(data.frame(k = 1:10, wss = wss), aes(x = k, y = wss)) +
+  geom_line() + geom_point() +
+  labs(title = "Elbow Method - Optimal Küme Sayısı", 
+       x = "Küme Sayısı (k)", y = "Within Sum of Squares") +
+  theme_minimal()
+```
+
+##### Silhouette Skorları
+
+```{r}
+p2 <- ggplot(data.frame(k = 2:10, sil = sil_scores), aes(x = k, y = sil)) +
+  geom_line() + geom_point() +
+  labs(title = "Silhouette Analizi", 
+       x = "Küme Sayısı (k)", y = "Ortalama Silhouette Skoru") +
+  theme_minimal()
+```
+
+##### K-means sonuçları - Giris_Anlik vs Zaman
+
+```{r}
+p3 <- ggplot(data_clean[1:min(1000, nrow(data_clean)),], 
+             aes(x = `Tarih-Saat`, y = Giris1_Anlik, color = kmeans_cluster)) +
+  geom_point(alpha = 0.7) +
+  labs(title = "K-means Kümeleme Sonuçları", 
+       x = "Tarih-Saat", y = "Giriş1 Anlık Debi (m³/h)", color = "Küme") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+##### K-means - Giris1_Anlik vs Saat dağılımı
+
+```{r}
+p5 <- ggplot(data_clean, aes(x = Saat, y = Giris1_Anlik, color = kmeans_cluster)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "K-means: Saatlik Debi Dağılımı", 
+       x = "Saat", y = "Giriş1 Anlık Debi (m³/h)", color = "Küme") +
+  theme_minimal()
+```
+
+##### Hafta içi/sonu karşılaştırması - K-means
+
+```{r}
+p7 <- ggplot(data_clean, aes(x = Hafta_Sonu, y = Giris1_Anlik, fill = kmeans_cluster)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(title = "K-means: Hafta İçi/Sonu Debi Karşılaştırması", 
+       x = "Hafta İçi/Sonu", y = "Giriş1 Anlık Debi (m³/h)", fill = "Küme") +
+  theme_minimal()
+```
+
+-   Grafikleri Görüntüleme İşlemleri
+
+```{r}
+# Grafikleri görüntüle
+grid.arrange(p1, p2, ncol = 2)
+grid.arrange(p3, p4, ncol = 1)
+grid.arrange(p5, p6, ncol = 1)
+grid.arrange(p7, p8, ncol = 1)
+```
+
+#### ANALİZ SONUÇLARI
+
+##### K-means Küme Özellikleri
+
+```{r}
+cat("K-MEANS KÜME ÖZETİ:\n")
+kmeans_summary <- data_clean %>% 
+  group_by(kmeans_cluster) %>% 
+  summarise(
+    n = n(),
+    ortalama_debi = round(mean(Giris1_Anlik), 2),
+    medyan_debi = round(median(Giris1_Anlik), 2),
+    min_debi = round(min(Giris1_Anlik), 2),
+    max_debi = round(max(Giris1_Anlik), 2),
+    std_debi = round(sd(Giris1_Anlik), 2),
+    hafta_sonu_oran = round(mean(Hafta_Sonu_num), 2)
+  )
+print(kmeans_summary)
+```
+
+##### DBSCAN Küme Özellikleri
+
+```{r}
+cat("\n\nDBSCAN KÜME ÖZETİ:\n")
+dbscan_summary <- data_clean %>% 
+  group_by(dbscan_cluster) %>% 
+  summarise(
+    n = n(),
+    ortalama_debi = round(mean(Giris1_Anlik), 2),
+    medyan_debi = round(median(Giris1_Anlik), 2),
+    min_debi = round(min(Giris1_Anlik), 2),
+    max_debi = round(max(Giris1_Anlik), 2),
+    std_debi = round(sd(Giris1_Anlik), 2),
+    hafta_sonu_oran = round(mean(Hafta_Sonu_num), 2)
+  )
+print(dbscan_summary)
+```
+
+##### Saatlik Debi Dağılımı Analizi
+
+```{r}
+cat("\n\nSAATLİK DEBİ ANALİZİ (K-MEANS):\n")
+saatlik_analiz <- data_clean %>% 
+  group_by(kmeans_cluster, Saat) %>% 
+  summarise(ortalama_debi = mean(Giris1_Anlik), .groups = 'drop') %>%
+  group_by(kmeans_cluster) %>%
+  summarise(
+    pik_saat = Saat[which.max(ortalama_debi)],
+    pik_debi = round(max(ortalama_debi), 2),
+    dusuk_saat = Saat[which.min(ortalama_debi)],
+    dusuk_debi = round(min(ortalama_debi), 2)
+  )
+print(saatlik_analiz)
+```
+
+##### Gürültü Oranı (DBSCAN)
+
+```{r}
+noise_ratio <- sum(dbscan_result$cluster == 0) / length(dbscan_result$cluster)
+cat(paste("\nDBSCAN Gürültü Oranı:", round(noise_ratio * 100, 2), "%\n"))
+
+```
+
+##### Küme Kalitesi Ölçümleri
+
+```{r}
+# Silhouette skorları
+kmeans_sil <- silhouette(kmeans_result$cluster, dist(features_scaled))
+dbscan_sil <- silhouette(dbscan_result$cluster[dbscan_result$cluster > 0], 
+                         dist(features_scaled[dbscan_result$cluster > 0,]))
+
+cat(paste("K-means Ortalama Silhouette Skoru:", round(mean(kmeans_sil[,3]), 3), "\n"))
+cat(paste("DBSCAN Ortalama Silhouette Skoru:", round(mean(dbscan_sil[,3]), 3), "\n"))
+
+
+cat("\nAnaliz tamamlandı! Sonuçlar 'atiksu_debi_kumeleme_sonuclari.csv' dosyasına kaydedildi.\n")
+```

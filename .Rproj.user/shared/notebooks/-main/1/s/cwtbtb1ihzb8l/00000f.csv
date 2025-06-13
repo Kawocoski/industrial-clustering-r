@@ -1,0 +1,29 @@
+"0","# DBSCAN parametrelerini belirleme"
+"0","# eps parametresi için k-distance grafiği"
+"0","kNNdist_plot <- kNNdistplot(features_scaled, k = 4)"
+"2","G2;H2;Warningh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  :
+  unable to open file 'C:/Users/Enis/Desktop/Yeni_veri_madencili?i_vdevi/.Rproj.user/shared/notebooks/-main/1/s/cwtbtb1ihzb8l_t/_rs_chunk_plot_001.png' for writingg
+"
+"2","G2;H2;Warningh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  :
+  opening device failedg
+"
+"2","G1;H1;Errorh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  : 
+  unable to start png() device
+wrapup sırasında hata: yığında o kadar çok çerçeve yok
+Error: no more error handlers available (recursive errors?); invoking 'abort' restart
+g"
+"0","abline(h = 2.5, col = ""red"", lty = 2)  # eps threshold"
+"2","G2;H2;Warningh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  :
+  unable to open file 'C:/Users/Enis/Desktop/Yeni_veri_madencili?i_�devi/.Rproj.user/shared/notebooks/-main/1/s/cwtbtb1ihzb8l_t/_rs_chunk_plot_001.png' for writingg
+G2;H2;Warningh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  :
+  opening device failedg
+"
+"2","G1;H1;Errorh in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  : 
+  unable to start png() device
+wrapup sırasında hata: yığında o kadar çok çerçeve yok
+Error: no more error handlers available (recursive errors?); invoking 'abort' restart
+g"
+"0","# DBSCAN uygulama"
+"0","dbscan_result <- dbscan(features_scaled, eps = 2.5, minPts = 5)"
+"2","G1;Hata: std::bad_alloc
+g"

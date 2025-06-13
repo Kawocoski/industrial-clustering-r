@@ -1,0 +1,9 @@
+"0","p2 <- ggplot(data.frame(k = 2:10, sil = sil_scores), aes(x = k, y = sil)) +"
+"0","  geom_line() + geom_point() +"
+"0","  labs(title = ""Silhouette Analizi"", "
+"0","       x = ""Küme Sayısı (k)"", y = ""Ortalama Silhouette Skoru"") +"
+"0","  theme_minimal()"
+"2","G1;Hata: 'sil_scores' nesnesi bulunamadı
+wrapup sırasında hata: yığında o kadar çok çerçeve yok
+H1;Errorh: no more error handlers available (recursive errors?); invoking 'abort' restart
+g"

@@ -1,0 +1,7 @@
+"0","p3 <- ggplot(data_clean[1:min(1000, nrow(data_clean)),], "
+"0","             aes(x = `Tarih-Saat`, y = Giris1_Anlik, color = kmeans_cluster)) +"
+"0","  geom_point(alpha = 0.7) +"
+"0","  labs(title = ""K-means Kümeleme Sonuçları"", "
+"0","       x = ""Tarih-Saat"", y = ""Giriş1 Anlık Debi (m³/h)"", color = ""Küme"") +"
+"0","  theme_minimal() +"
+"0","  theme(axis.text.x = element_text(angle = 45, hjust = 1))"

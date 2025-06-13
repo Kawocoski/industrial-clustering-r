@@ -1,0 +1,5 @@
+"0","p5 <- ggplot(data_clean, aes(x = Saat, y = Giris1_Anlik, color = kmeans_cluster)) +"
+"0","  geom_point(alpha = 0.6) +"
+"0","  labs(title = ""K-means: Saatlik Debi Dağılımı"", "
+"0","       x = ""Saat"", y = ""Giriş1 Anlık Debi (m³/h)"", color = ""Küme"") +"
+"0","  theme_minimal()"
