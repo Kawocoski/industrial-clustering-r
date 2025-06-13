@@ -1,0 +1,19 @@
+project:
+  type: manuscript
+
+format:
+  html:
+  toc: true
+number-sections: true
+theme: cosmo
+code-fold: false
+self-contained: true
+
+execute:
+  echo: true
+message: false
+warning: false
+freeze: auto
+
+publish:
+  target: gh-pages
